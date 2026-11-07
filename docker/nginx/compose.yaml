@@ -1,0 +1,15 @@
+name: taskflow
+
+services:
+  web:
+    image: nginx:latest
+    restart: always
+    ports:
+      - "8080:80"
+    volumes:
+      - taskflow:/usr/share/nginx/html
+
+volumes:
+  taskflow:
+    external: true
+
