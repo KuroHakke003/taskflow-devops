@@ -40,6 +40,8 @@ Docker Compose manages the services, their networking, configuration, health che
 
 The API communicates with PostgreSQL through Docker's internal service network.
 
+The application is now deployed on an Ubuntu VM using GHCR and Docker Compose.
+
 ## CI/CD Pipeline
 
 TaskFlow uses GitHub Actions to automate testing, Docker image building, and publishing.
