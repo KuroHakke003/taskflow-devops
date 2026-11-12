@@ -1,0 +1,12 @@
+groups:
+  - name: taskflow-alerts
+    rules:
+      - alert: HighCPUUsage
+        expr: 100 * (1 - avg(rate(node_cpu_seconds_total{mode="idle"}[5m]))) > 80
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+         summary: "High CPU usage detected"
+         description: "CPU usage has been above 80% for more than 2 minutes."
+

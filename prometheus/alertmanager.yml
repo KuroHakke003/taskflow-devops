@@ -1,0 +1,20 @@
+route:
+ group_by: ['alertname', 'cluster', 'service']
+ group_wait: 10s
+ group_interval: 30s
+ repeat_interval: 4h
+ receiver: 'taskflow-telegram'
+
+receivers:
+ - name: 'taskflow-telegram'
+   telegram_configs:
+     - bot_token_file: /etc/alertmanager/secrets/telegram_bot_token
+       chat_id: 786244544
+       parse_mode: 'HTML'
+       send_resolved: true
+       message: |
+         {{ if eq .Status "firing" }}🔥 <b>FIRING</b>{{ else }}✅ <b>RESOLVED</b>{{ end }}
+         <b>Alert:</b> {{ .CommonLabels.alertname }}
+         <b>Severity:</b> {{ .CommonLabels.severity }}
+         <b>Summary:</b> {{ .CommonAnnotations.summary }}
+         <b>Description:</b> {{ .CommonAnnotations.description }}

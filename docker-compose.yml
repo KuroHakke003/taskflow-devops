@@ -33,7 +33,9 @@ services:
  nginx:
   image: nginx:latest
   depends_on:
-   - api
+   api:
+    condition: service_healthy
+  restart: unless-stopped
   ports:
    -  "80:80"
   volumes:
@@ -58,6 +60,7 @@ services:
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
       - prometheus_data:/prometheus
+      - ./prometheus/rules:/etc/prometheus/rules
     command:
       - '--web.external-url=https://kuro.tailf6fa49.ts.net/prometheus/'
       - '--web.route-prefix=/'
@@ -73,6 +76,16 @@ services:
   restart: unless-stopped
   volumes:
    - grafana_data:/var/lib/grafana
+
+ alertmanager:
+  image: prom/alertmanager:v0.31.1
+  container_name: alertmanager
+  ports:
+   - "9093:9093"
+  restart: unless-stopped
+  volumes:
+   - ./prometheus/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+   - ./secrets:/etc/alertmanager/secrets:ro
 
 volumes:
  postgres_data:
