@@ -10,3 +10,102 @@ groups:
          summary: "High CPU usage detected"
          description: "CPU usage has been above 80% for more than 2 minutes."
 
+      - alert: NodeExporterDown
+        expr: up{job="node-exporter"} == 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+         summary: "Node Exporter Down"
+         description: "Node Exporter has been unavailable for more than 1 minute"
+
+      - alert: HighMemoryUsage
+        expr: 100 * (1- (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+         summary: "High Memory usage detected"
+         description: "Memory usage has been above 85% for more than 5 minutes."
+
+      - alert: LowDiskSpace
+        expr: 100 * (node_filesystem_avail_bytes{fstype="ext4", mountpoint="/"} / node_filesystem_size_bytes{fstype="ext4", mountpoint="/"}) < 15
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+         summary: "Low disk space"
+         description: "Less than 15% space left in root directory for more than 5 minutes"
+
+      - alert: HighDiskUsage
+        expr: 100 * (1-(node_filesystem_avail_bytes{fstype="ext4", mountpoint="/"} / node_filesystem_size_bytes{fstype="ext4", mountpoint="/"})) > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+         summary: "High disk usage"
+         description: "Disk usage has been above 85% for more than 5 minutes"
+
+      - alert: PrometheusDown
+        expr: up{job="prometheus"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+         summary: "Prometheus is down"
+         description: "Prometheus has been unavailable for more than 1 minute"
+
+      - alert: GrafanaDown
+        expr: up{job="grafana"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+         summary: "Grafana is down"
+         description: "Grafana has been unavailable for more than 1 minute"
+
+      - alert: AlertmanagerDown
+        expr: up{job="alertmanager"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+         summary: "AlertManager is down"
+         description: "AlertManager has been unavailable for more than 1 minute"
+
+      - alert: APIDown
+        expr: up{job="taskflow-api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "TaskFlow API is down"
+          description: "Prometheus cannot scrape TaskFlow API metrics."
+
+      - alert: HighAPI5xxErrorRate
+        expr: |
+          (
+            sum(rate(http_requests_total{job="taskflow-api", status="5xx"}[5m]))
+            /
+            clamp_min(sum(rate(http_requests_total{job="taskflow-api"}[5m])), 0.001)) * 100 > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High API 5xx error rate"
+          description: "More than 5% of TaskFlow API requests are returning 5xx errors."
+
+      - alert: HighAPIResponseTime
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le) (
+              rate(http_request_duration_seconds_bucket{job="taskflow-api"}[5m])
+            )
+          ) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High API response time"
+          description: "TaskFlow API p95 response time is above 1 second."
