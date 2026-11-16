@@ -2,23 +2,27 @@
 
 A production-oriented task management API used to practice building, deploying, monitoring, and operating a containerized application with real-world DevOps tools and workflows.
 
-The repository documents the engineering work as the project evolves, including infrastructure decisions, CI/CD, deployment, monitoring, observability, and troubleshooting.
+The repository documents the engineering work as the project evolves, including infrastructure decisions, CI/CD, deployment, monitoring, observability, Kubernetes, and incident troubleshooting.
 
 This is a hands-on learning and portfolio project focused on understanding how applications and infrastructure behave in real operating environments.
 
 ## Project Overview
 
-TaskFlow is a task management application built with FastAPI and PostgreSQL. The application is containerized with Docker and orchestrated locally using Docker Compose.
+TaskFlow is a task management application built with FastAPI and PostgreSQL.
 
-The deployment uses Nginx as a reverse proxy in front of the API. The API image is built and published to GitHub Container Registry (GHCR) through GitHub Actions.
+The primary application deployment uses Docker and Docker Compose, with Nginx acting as a reverse proxy in front of the API. The API image is built and published to GitHub Container Registry (GHCR) through GitHub Actions.
 
 Remote access is provided through Tailscale Serve, allowing private HTTPS access to the application.
 
-The infrastructure has also been extended with a monitoring stack consisting of Prometheus, Node Exporter, and Grafana. Prometheus collects infrastructure metrics, Node Exporter exposes host-level system metrics, and Grafana provides dashboards and visualization.
+The project also includes a dedicated monitoring stack built with Prometheus, Node Exporter, Alertmanager, and Grafana. It collects infrastructure metrics, visualizes system performance, and sends alert notifications to Telegram.
+
+Additionally, the project has been extended with a Kubernetes environment using K3s. This environment is used to learn Kubernetes deployments, services, secrets, persistent storage, container orchestration, and troubleshooting.
 
 The project is continuously evolving as new DevOps concepts and operational practices are introduced.
 
 ## Current Architecture
+
+### Docker Compose Application
 
 ```text
                          Client
@@ -28,7 +32,7 @@ The project is continuously evolving as new DevOps concepts and operational prac
                      Tailscale Serve
                            |
                            v
-                     Nginx (80)
+                       Nginx (80)
                            |
                            | Docker Compose network
                            v
@@ -39,27 +43,59 @@ The project is continuously evolving as new DevOps concepts and operational prac
                       PostgreSQL 16
                            |
                            v
-                    postgres_data
+                      postgres_data
+```
 
+### Monitoring Stack
 
-                  MONITORING STACK
-
-                     Host System
+```text
+                       Host System
                            |
                            v
-                     Node Exporter
+                      Node Exporter
                            |
                            | System Metrics
                            v
                        Prometheus
                            |
-                           | PromQL / Queries
-                           v
-                        Grafana
+                  +--------+--------+
+                  |                 |
+                  v                 v
+               Grafana          Alertmanager
+                  |                 |
+                  v                 v
+              Dashboards        Telegram Alerts
+```
+
+### Kubernetes Environment (K3s)
+
+```text
+                       K3s Cluster
                            |
                            v
-                     Dashboards
+                       Namespace
+                        taskflow
+                           |
+              +------------+------------+
+              |                         |
+              v                         v
+        TaskFlow API               PostgreSQL
+         Deployment                Deployment
+              |                         |
+              v                         v
+        API Service                 db Service
+                                        |
+                                        v
+                                 PostgreSQL Pod
+                                        |
+                                        v
+                                  postgres-pvc
+                                        |
+                                        v
+                                Persistent Storage
 ```
+
+The Kubernetes environment is currently experimental and under development. The initial deployments and persistent storage configuration have been created, but PostgreSQL startup troubleshooting remains in progress.
 
 ### Services
 
@@ -69,12 +105,17 @@ The project is continuously evolving as new DevOps concepts and operational prac
 | Database | PostgreSQL 16 | Persistent application data |
 | Reverse proxy | Nginx | Routes incoming requests to the API |
 | Containers | Docker | Packages and isolates services |
-| Orchestration | Docker Compose | Runs application and infrastructure services |
+| Application orchestration | Docker Compose | Runs application and infrastructure services |
+| Kubernetes | K3s | Local Kubernetes environment |
+| Kubernetes workloads | Deployments, Services, Secrets | Manages application and database workloads |
+| Persistent storage | PersistentVolumeClaims | Provides persistent storage to Kubernetes workloads |
 | CI/CD | GitHub Actions | Runs tests and builds/publishes container images |
 | Image registry | GitHub Container Registry | Stores the TaskFlow API image |
 | Remote access | Tailscale Serve | Provides private HTTPS access |
 | Metrics collection | Prometheus | Scrapes and stores monitoring metrics |
 | Host monitoring | Node Exporter | Exposes Linux system metrics |
+| Alerting | Alertmanager | Handles monitoring alerts |
+| Notifications | Telegram | Delivers alert notifications |
 | Visualization | Grafana | Creates dashboards and visualizes metrics |
 
 ## Technology Stack
@@ -87,9 +128,12 @@ The project is continuously evolving as new DevOps concepts and operational prac
 - **CI/CD:** GitHub Actions
 - **Container registry:** GHCR
 - **Remote access:** Tailscale
+- **Kubernetes:** K3s, kubectl
 - **Monitoring:** Prometheus
 - **Metrics exporter:** Node Exporter
 - **Visualization:** Grafana
+- **Alerting:** Alertmanager
+- **Notifications:** Telegram
 - **Query language:** PromQL
 
 ## Repository Structure
@@ -107,6 +151,11 @@ The project is continuously evolving as new DevOps concepts and operational prac
 ├── docker/
 │   └── nginx/
 │
+├── k8s/
+│   ├── deployment.yaml
+│   ├── postgres-deployment.yaml
+│   └── ...
+│
 ├── docs/
 │   ├── architecture/
 │   ├── decisions/
@@ -122,6 +171,8 @@ The project is continuously evolving as new DevOps concepts and operational prac
 ├── nginx.conf
 └── requirements.txt
 ```
+
+The `k8s/` directory contains Kubernetes manifests used to configure the experimental K3s environment.
 
 ## Running the Project
 
@@ -206,7 +257,7 @@ ghcr.io/kurohakke003/taskflow-devops:latest
 
 ## Data Persistence
 
-PostgreSQL stores its data in the named Docker volume `postgres_data`.
+The Docker Compose PostgreSQL service stores its data in the named Docker volume `postgres_data`.
 
 - `docker compose down` removes containers and the Compose network but preserves named volumes.
 - `docker compose down -v` also removes Compose-managed named volumes and their stored database data.
@@ -217,9 +268,15 @@ Prometheus uses the named volume `prometheus_data` to retain collected metrics a
 
 Grafana stores its application data under `/var/lib/grafana`.
 
+The Kubernetes environment uses a PersistentVolumeClaim named `postgres-pvc` for PostgreSQL storage.
+
+The PVC is currently bound to a persistent volume through the K3s `local-path` StorageClass. It has been retained during troubleshooting.
+
+Persistent storage resources should not be deleted during routine troubleshooting because doing so may result in data loss.
+
 ## Monitoring and Observability
 
-The project now includes a monitoring stack built around Prometheus, Node Exporter, and Grafana.
+The project includes a monitoring stack built around Prometheus, Node Exporter, Alertmanager, Grafana, and Telegram notifications.
 
 ### Prometheus
 
@@ -250,13 +307,26 @@ Node Exporter runs with access to host-level system information so that metrics 
 
 Grafana is used to visualize metrics collected by Prometheus.
 
-Current learning objectives include:
+The initial monitoring dashboard has been completed with infrastructure graphs.
 
-- Connecting Prometheus as a Grafana data source.
-- Understanding dashboard panels.
-- Creating metric visualizations.
-- Writing PromQL queries for dashboards.
-- Interpreting system behavior through graphs.
+The dashboard includes visualizations for:
+
+- CPU usage.
+- RAM usage.
+- Disk usage.
+- Host resource utilization over time.
+
+Grafana is used to identify abnormal resource consumption and understand system behavior through metric visualization.
+
+### Alertmanager and Telegram
+
+Alertmanager handles monitoring alerts and delivers notifications to Telegram.
+
+The project includes a `HighCPUUsage` alert that detects unusually high CPU consumption.
+
+A successful Telegram notification confirmed that the alert delivery pipeline was operational during the November 16 incident.
+
+The monitoring stack has therefore been tested not only through dashboards but also through an actual infrastructure incident.
 
 ### PromQL
 
@@ -279,7 +349,42 @@ Example query for network traffic:
 rate(node_network_receive_bytes_total[5m])
 ```
 
-Monitoring and alerting are still evolving parts of the project. The current implementation focuses primarily on infrastructure metrics and understanding the monitoring pipeline.
+Monitoring and alerting are continuously evolving parts of the project.
+
+## Kubernetes and Container Orchestration
+
+The project has an experimental Kubernetes environment running on K3s.
+
+The purpose of this environment is to understand how application workloads are deployed and operated using Kubernetes resources.
+
+Concepts explored so far:
+
+- K3s cluster initialization.
+- Kubernetes nodes and cluster status.
+- Namespaces.
+- Deployments and Pods.
+- Services and internal cluster networking.
+- Kubernetes Secrets.
+- PersistentVolumeClaims.
+- Container resource monitoring.
+- Application and database troubleshooting.
+
+### Current Kubernetes Status
+
+Initial TaskFlow API and PostgreSQL deployments have been configured.
+
+The PostgreSQL Deployment uses:
+
+- PostgreSQL 16.
+- Kubernetes Secret `postgres-secret`.
+- PersistentVolumeClaim `postgres-pvc`.
+- A Kubernetes Service named `db`.
+
+However, PostgreSQL has experienced a startup failure. The Pod reported `Running`, but the database did not become available.
+
+The K3s service was temporarily stopped during incident investigation. The PostgreSQL PVC and Kubernetes manifests were retained.
+
+Kubernetes troubleshooting is ongoing, and the environment should not yet be considered a completed production deployment.
 
 ## Operations and Troubleshooting
 
@@ -297,6 +402,39 @@ Operational experience gained through the project includes:
 - Monitoring host-level metrics with Prometheus and Node Exporter.
 - Visualizing infrastructure metrics with Grafana.
 - Investigating system uptime and network traffic through PromQL.
+- Inspecting Linux processes using `htop` and `ps`.
+- Understanding process IDs, parent process IDs, process states, and CPU consumption.
+- Investigating container runtime processes and `containerd-shim-runc-v2`.
+- Troubleshooting Kubernetes Pods and container startup failures.
+
+### Incident: High CPU Usage — November 16, 2026
+
+During Kubernetes troubleshooting, the Grafana dashboard reported CPU usage of approximately 99.9%.
+
+Alertmanager successfully delivered a `HighCPUUsage` notification to Telegram.
+
+Stopping K3s did not immediately resolve the high CPU usage.
+
+Further investigation using `htop` revealed four runaway `gosu postgres` processes, each consuming approximately 200% CPU.
+
+Using `ps`, their shared parent process was identified as `containerd-shim-runc-v2`, associated with the Kubernetes container runtime.
+
+The four processes continued running even after the K3s service had been stopped.
+
+After terminating the processes, CPU utilization dropped significantly:
+
+| Metric | Before | After |
+|---|---:|---:|
+| CPU 0 | 100% | 2.8% |
+| CPU 1 | 100% | 0.8% |
+| Load average (1 min) | 5.04 | 3.87 |
+| RAM | 927 MB | 893 MB |
+
+This confirmed that the four runaway processes were responsible for the immediate CPU overload.
+
+The underlying reason why the processes became stuck remains under investigation.
+
+The incident provided practical experience with monitoring alerts, Linux process inspection, container runtime behavior, and resource troubleshooting.
 
 The project emphasizes not only deploying services but also understanding failures, identifying their causes, and observing how infrastructure behaves under different conditions.
 
@@ -307,11 +445,16 @@ The project emphasizes not only deploying services but also understanding failur
 - [x] Docker and Docker Compose
 - [x] CI/CD with GitHub Actions and GHCR
 - [x] Deployment and Nginx reverse proxy
-- [x] Initial monitoring stack with Prometheus, Node Exporter, and Grafana
-- [ ] Advanced PromQL and custom Grafana dashboards
-- [ ] Alerting and monitoring improvements
+- [x] Initial monitoring stack with Prometheus and Node Exporter
+- [x] Grafana dashboard with infrastructure graphs
+- [x] Alertmanager and Telegram alert notifications
+- [x] Initial K3s cluster setup and Kubernetes resource configuration
+- [ ] Complete Kubernetes deployment and troubleshooting
+- [ ] Restore PostgreSQL availability in Kubernetes
+- [ ] Advanced PromQL and monitoring improvements
 - [ ] Cloud infrastructure and Infrastructure as Code
-- [ ] Kubernetes
+- [ ] Terraform
+- [ ] Further Kubernetes practice
 - [ ] Final project hardening and job preparation
 
 ## Engineering Documentation
@@ -331,4 +474,4 @@ The goal is to build practical DevOps experience by operating a real application
 
 **Development → Testing → Containerization → CI/CD → Deployment → Monitoring → Troubleshooting → Infrastructure Automation**
 
-TaskFlow serves as a continuously evolving portfolio project demonstrating practical knowledge of Linux, networking, containers, CI/CD, monitoring, observability, and infrastructure operations.
+TaskFlow serves as a continuously evolving portfolio project demonstrating practical knowledge of Linux, networking, containers, CI/CD, monitoring, observability, Kubernetes, and infrastructure operations.
