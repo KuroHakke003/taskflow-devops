@@ -1,3 +1,5 @@
+# Database backups
+*.sql
 k8s/postgres-secret.yaml
 secrets/
 .env
