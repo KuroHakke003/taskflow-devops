@@ -13,9 +13,19 @@ spec:
       labels:
         app: taskflow-api
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+      serviceAccountName: taskflow-api
       containers:
         - name: taskflow-api
           image: ghcr.io/kurohakke003/taskflow-devops:latest
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
           ports:
             - containerPort: 8000
           env:

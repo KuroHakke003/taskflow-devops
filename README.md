@@ -2,7 +2,7 @@
 
 A production-oriented task management API used to practice building, deploying, monitoring, and operating a containerized application with real-world DevOps tools and workflows.
 
-The repository documents the engineering work as the project evolves, including infrastructure decisions, CI/CD, deployment, monitoring, observability, Kubernetes, and incident troubleshooting.
+The repository documents the engineering work as the project evolves, including infrastructure decisions, CI/CD, deployment, monitoring, observability, Kubernetes, security hardening, and incident troubleshooting.
 
 This is a hands-on learning and portfolio project focused on understanding how applications and infrastructure behave in real operating environments.
 
@@ -16,7 +16,7 @@ Remote access is provided through Tailscale Serve, allowing private HTTPS access
 
 The project also includes a dedicated monitoring stack built with Prometheus, Node Exporter, Alertmanager, and Grafana. It collects infrastructure metrics, visualizes system performance, and sends alert notifications to Telegram.
 
-Additionally, the project includes a Kubernetes environment running on K3s. It is used to practice workload orchestration, service discovery, configuration management, persistent storage, autoscaling, and troubleshooting.
+Additionally, the project includes a Kubernetes environment running on K3s. It is used to practice workload orchestration, service discovery, configuration management, persistent storage, autoscaling, security controls, network isolation, and troubleshooting.
 
 The project is continuously evolving as new DevOps concepts and operational practices are introduced.
 
@@ -25,72 +25,81 @@ The project is continuously evolving as new DevOps concepts and operational prac
 ### Docker Compose Application
 
 ```text
-                         Client
+                          Client
                             |
                           HTTPS
                             |
-                     Tailscale Serve
+                      Tailscale Serve
                             |
-                         Nginx (80)
+                          Nginx (80)
                             |
-                    Docker Compose Network
+                     Docker Compose Network
                             |
-                       FastAPI (8000)
+                        FastAPI (8000)
                             |
-                      Docker DNS: db
+                       Docker DNS: db
                             |
-                      PostgreSQL 16
+                       PostgreSQL 16
                             |
-                       postgres_data
+                        postgres_data
 ```
 
 ### Monitoring Stack
 
 ```text
-                        Host System
+                         Host System
                             |
-                      Node Exporter
+                       Node Exporter
                             |
-                     System Metrics
+                      System Metrics
                             |
-                        Prometheus
+                         Prometheus
                             |
-                   +--------+--------+
-                   |                 |
-                Grafana         Alertmanager
-                   |                 |
-               Dashboards      Telegram Alerts
+                    +--------+--------+
+                    |                 |
+                 Grafana         Alertmanager
+                    |                 |
+                Dashboards      Telegram Alerts
 ```
 
 ### Kubernetes Environment (K3s)
 
 ```text
                          K3s Cluster
-                             |
-                          Namespace
-                           taskflow
-                             |
-                  +----------+----------+
-                  |                     |
-                  v                     v
-             TaskFlow API           PostgreSQL
-              Deployment            StatefulSet
-                  |                     |
-                  v                     v
-             API Service          Headless Service
-                  |                     |
-                  |                 postgres-0
-                  |                     |
-                  |                  postgres-pvc
-                  |                     |
-                  +---------------------+
+                            |
+                      Namespace: taskflow
+                            |
+                   +----------+----------+
+                   |                     |
+                   v                     v
+              TaskFlow API           PostgreSQL
+               Deployment            StatefulSet
+               (2 replicas)          (1 replica)
+                   |                     |
+                   v                     v
+              API Service          Headless Service
+                   |                     |
+                   |                 postgres-0
+                   |                     |
+                   |                  postgres-pvc
+                   |
+              API NetworkPolicy
+                   |
+        Ingress allowed from Pods
+        within namespace taskflow
+
+PostgreSQL NetworkPolicy:
+Ingress allowed to TCP/5432
+from TaskFlow API Pods only
 ```
 
 The Kubernetes environment is a separate deployment from Docker Compose. Both environments have their own application workloads and database storage.
 
 The API communicates with PostgreSQL through the Kubernetes Service named `db`.
 
-The PostgreSQL StatefulSet uses a headless Service for stable network identity and reuses the existing PersistentVolumeClaim.
+The PostgreSQL StatefulSet uses a headless Service for stable network identity and a PersistentVolumeClaim for persistent storage.
+
+NetworkPolicies restrict incoming traffic to the API and PostgreSQL workloads.
 
 ### Services
 
@@ -103,11 +112,13 @@ The PostgreSQL StatefulSet uses a headless Service for stable network identity a
 | Application orchestration | Docker Compose | Runs application and infrastructure services |
 | Kubernetes | K3s | Local Kubernetes environment |
 | Workload management | Deployments, StatefulSets, Pods | Manages application and database workloads |
-| Networking | Kubernetes Services | Internal service discovery and communication |
+| Networking | Kubernetes Services, NetworkPolicies | Internal service discovery, communication, and ingress restrictions |
 | Configuration | ConfigMaps | Stores non-sensitive application configuration |
 | Secrets | Kubernetes Secrets | Stores database credentials |
 | Persistent storage | PersistentVolumeClaims | Provides persistent storage to Kubernetes workloads |
-| Autoscaling | Horizontal Pod Autoscaler | Scales API replicas based on CPU utilization |
+| Autoscaling | Horizontal Pod Autoscaler | Scales API replicas based on CPU and memory utilization |
+| Container security | SecurityContext | Restricts container privileges and execution identity |
+| Kubernetes identity | ServiceAccount | Provides a dedicated workload identity |
 | CI/CD | GitHub Actions | Runs tests and builds/publishes container images |
 | Image registry | GitHub Container Registry | Stores the TaskFlow API image |
 | Remote access | Tailscale Serve | Provides private HTTPS access |
@@ -129,8 +140,9 @@ The PostgreSQL StatefulSet uses a headless Service for stable network identity a
 - **Remote access:** Tailscale
 - **Kubernetes:** K3s, kubectl
 - **Kubernetes workloads:** Deployments, StatefulSets, Pods
-- **Kubernetes networking:** ClusterIP Services, Headless Services
+- **Kubernetes networking:** ClusterIP Services, Headless Services, NetworkPolicies
 - **Kubernetes configuration:** ConfigMaps, Secrets
+- **Kubernetes security:** SecurityContext, ServiceAccounts, RBAC principles
 - **Persistent storage:** PersistentVolumes, PersistentVolumeClaims, local-path
 - **Autoscaling:** Horizontal Pod Autoscaler (HPA)
 - **Monitoring:** Prometheus
@@ -163,7 +175,10 @@ The PostgreSQL StatefulSet uses a headless Service for stable network identity a
 │   ├── postgres-statefulset.yaml
 │   ├── postgres-service.yaml
 │   ├── postgres-headless.yaml
-│   └── postgres-pvc.yaml
+│   ├── postgres-pvc.yaml
+│   ├── serviceaccount.yaml
+│   ├── networkpolicy-postgres.yaml
+│   └── networkpolicy-api.yaml
 │
 ├── docs/
 │   ├── architecture/
@@ -197,7 +212,6 @@ Sensitive configuration files, including database credentials, are intentionally
 
 ```bash
 git clone https://github.com/KuroHakke003/taskflow-devops.git
-
 cd taskflow-devops
 ```
 
@@ -287,12 +301,10 @@ The Kubernetes PostgreSQL workload uses a PersistentVolumeClaim named `postgres-
 
 - Storage request: `2Gi`
 - Access mode: `ReadWriteOnce`
-- Storage provisioner: K3s `local-path`
+- Storage class: K3s `local-path`
 - Status: `Bound`
 
-The PVC is reused by the PostgreSQL StatefulSet. The migration from Deployment to StatefulSet retained the existing PVC and its bound PersistentVolume.
-
-Persistent storage resources should not be deleted during routine troubleshooting because doing so may result in data loss.
+The PVC is used by the PostgreSQL StatefulSet. Persistent storage resources should not be deleted during routine troubleshooting because doing so may result in data loss.
 
 ## Monitoring and Observability
 
@@ -371,7 +383,7 @@ Monitoring and alerting are continuously evolving parts of the project.
 
 The project includes a Kubernetes environment running on K3s.
 
-The purpose of this environment is to understand how application workloads are deployed, configured, scaled, and operated using Kubernetes resources.
+The purpose of this environment is to understand how application workloads are deployed, configured, secured, scaled, and operated using Kubernetes resources.
 
 ### Kubernetes Concepts Implemented
 
@@ -387,28 +399,41 @@ The purpose of this environment is to understand how application workloads are d
 - Metrics API and resource monitoring with `kubectl top`.
 - Horizontal Pod Autoscaler (HPA).
 - PostgreSQL StatefulSet.
-- PostgreSQL backup using `pg_dump`.
+- PostgreSQL backup and restore testing.
+- ServiceAccounts and token mount control.
+- RBAC and least-privilege principles.
+- Container and Pod security hardening.
+- NetworkPolicies and network isolation testing.
 
 ### Current Kubernetes Architecture
 
 The cluster uses a dedicated namespace named `taskflow`.
 
-**TaskFlow API**
+#### TaskFlow API
+
 - Managed by a Deployment named `taskflow-api`.
 - Exposed internally through the `taskflow-api` ClusterIP Service.
 - Uses a ConfigMap for non-sensitive application configuration.
 - Uses a Kubernetes Secret for PostgreSQL credentials.
 - Configured with liveness and readiness probes.
 - Has CPU and memory requests and limits.
-- Scaled through an HPA based on CPU utilization.
+- Runs as a non-root user.
+- Uses a dedicated ServiceAccount.
+- Does not automatically mount a ServiceAccount token.
+- Has privilege escalation disabled and Linux capabilities dropped.
+- Scaled through an HPA based on CPU and memory utilization.
+- Protected by a NetworkPolicy that restricts ingress to Pods in the same namespace.
 
-**PostgreSQL**
+#### PostgreSQL
+
 - Managed by a StatefulSet named `postgres`.
 - Uses PostgreSQL 16.
 - Uses the `postgres-secret` Kubernetes Secret for credentials.
-- Uses the existing `postgres-pvc` PersistentVolumeClaim.
+- Uses the `postgres-pvc` PersistentVolumeClaim.
 - Uses a headless Service named `postgres-headless` for stable Pod identity.
 - Is reachable by the API through the regular `db` ClusterIP Service.
+- Has CPU and memory requests and limits.
+- Protected by a NetworkPolicy that restricts ingress to TaskFlow API Pods on TCP port `5432`.
 
 ### Configuration Management
 
@@ -461,8 +486,9 @@ Current configuration:
 - Minimum replicas: 1
 - Maximum replicas: 3
 - CPU utilization target: 50% of requested CPU
+- Memory utilization target: 70% of requested memory
 
-The HPA uses resource metrics to adjust the number of API replicas based on CPU utilization.
+The HPA uses resource metrics to adjust the number of API replicas based on CPU and memory utilization.
 
 A load test using a temporary BusyBox Pod successfully triggered scale-up from one API replica to the configured maximum of three replicas.
 
@@ -486,29 +512,85 @@ The normal `db` Service remains in place, so the API can continue connecting to 
 
 A PostgreSQL backup was created using `pg_dump` and inspected to verify the resulting SQL dump.
 
-The Kubernetes PostgreSQL database was empty at the time of the backup. The backup therefore represents the current Kubernetes database state, not the separate Docker Compose database.
+A restore test was performed using a temporary PostgreSQL environment:
 
-A restore procedure has not yet been tested. Recovery testing remains a planned task.
+- Restored the database dump.
+- Verified that the database schema and `tasks` table were present.
+- Verified table ownership.
+- Confirmed that the restore operation completed successfully.
+
+The backup used for this test represented an empty baseline database, so the restored `tasks` table contained zero rows. The test verified the restoration procedure and schema recovery, not recovery of populated production data.
+
+### ServiceAccount and Access Control
+
+The API uses a dedicated ServiceAccount named `taskflow-api`.
+
+- The Deployment references the dedicated ServiceAccount.
+- Automatic ServiceAccount token mounting is disabled.
+- The token mount was verified to be absent from the running API Pod.
+- The application does not currently require Kubernetes API permissions.
+- No additional Role or RoleBinding permissions were granted to the API.
+
+This follows a least-privilege approach by avoiding unnecessary access to the Kubernetes API.
+
+### SecurityContext and Container Hardening
+
+The TaskFlow API container is configured to run with reduced privileges.
+
+- `runAsNonRoot: true`
+- `runAsUser: 999`
+- `runAsGroup: 999`
+- `allowPrivilegeEscalation: false`
+- `capabilities.drop: ALL`
+
+The Dockerfile was also modified to run the application as a non-root user. The container's user identity was verified during testing.
+
+### NetworkPolicies
+
+Two NetworkPolicies are configured in the `taskflow` namespace.
+
+**PostgreSQL NetworkPolicy:**
+
+- Selects PostgreSQL Pods using `app=postgres`.
+- Allows ingress on TCP port `5432`.
+- Allows connections only from Pods labeled `app=taskflow-api` in the same namespace.
+
+**API NetworkPolicy:**
+
+- Selects API Pods using `app=taskflow-api`.
+- Allows ingress on TCP port `8000`.
+- Allows connections from Pods in the same namespace using an empty `podSelector`.
+- Does not restrict egress traffic.
+
+**Network isolation was tested:**
+
+- Verified that an in-namespace test Pod could access the API.
+- Verified that a test Pod in another namespace could not access the API through the Service.
+- Verified that direct Pod-IP access from the external test namespace was also blocked.
+- Tested PostgreSQL ingress from an unauthorized test Pod and confirmed it could not connect.
+
+These tests were performed using temporary Pods and a temporary namespace, which were removed after testing.
 
 ### Current Kubernetes Status
-
-The current K3s environment has the following workloads and resources:
 
 | Resource | Name | Status |
 |---|---|---|
 | Namespace | `taskflow` | Configured |
-| API Deployment | `taskflow-api` | Available |
+| API Deployment | `taskflow-api` | 2/2 Ready |
 | API Service | `taskflow-api` | Configured |
-| PostgreSQL StatefulSet | `postgres` | Ready |
+| PostgreSQL StatefulSet | `postgres` | 1/1 Ready |
 | PostgreSQL Pod | `postgres-0` | Running |
 | Database Service | `db` | Configured |
 | Headless Service | `postgres-headless` | Configured |
-| PersistentVolumeClaim | `postgres-pvc` | Bound |
+| PersistentVolumeClaim | `postgres-pvc` | Bound, 2Gi |
 | ConfigMap | `taskflow-config` | Configured |
 | Secret | `postgres-secret` | Configured |
-| Horizontal Pod Autoscaler | `api-hpa` | Active |
+| ServiceAccount | `taskflow-api` | Configured |
+| Horizontal Pod Autoscaler | `api-hpa` | Active, 2 replicas |
+| PostgreSQL NetworkPolicy | `postgres-network-policy` | Applied and tested |
+| API NetworkPolicy | `taskflow-api-network-policy` | Applied and tested |
 
-The API and PostgreSQL workloads are running in the `taskflow` namespace. The HPA has been verified through a scale-up test.
+The API and PostgreSQL workloads are running in the `taskflow` namespace. The HPA has been verified through a scale-up test, and the network isolation policies have been tested.
 
 The Kubernetes environment remains a learning and portfolio environment rather than a production-ready deployment.
 
@@ -536,6 +618,8 @@ Operational experience gained through the project includes:
 - Monitoring HPA scaling behavior.
 - Working with PostgreSQL StatefulSets and persistent storage.
 - Creating and inspecting PostgreSQL backups.
+- Testing PostgreSQL restore procedures.
+- Testing Kubernetes network isolation.
 
 ### Incident: High CPU Usage — November 16, 2026
 
@@ -599,22 +683,30 @@ The project emphasizes not only deploying services but also understanding failur
 - [x] Liveness and readiness probes
 - [x] CPU and memory requests and limits
 - [x] Kubernetes resource monitoring
-- [x] Horizontal Pod Autoscaler and scale-up testing
+- [x] Horizontal Pod Autoscaler using CPU and memory
+- [x] HPA scale-up testing
 - [x] PostgreSQL migration to StatefulSet
 - [x] PostgreSQL backup creation and inspection
+- [x] PostgreSQL restore testing
+- [x] Dockerfile non-root hardening
+- [x] Kubernetes SecurityContext
+- [x] Dedicated ServiceAccount
+- [x] Disabled automatic ServiceAccount token mounting
+- [x] RBAC and least-privilege approach
+- [x] PostgreSQL NetworkPolicy
+- [x] API NetworkPolicy
+- [x] Network isolation testing
 
 ### Planned
 
-- [ ] Test PostgreSQL backup restoration
 - [ ] Kubernetes Ingress and external routing
-- [ ] TLS configuration
-- [ ] Kubernetes RBAC and ServiceAccounts
-- [ ] SecurityContexts and container security
+- [ ] TLS configuration for Kubernetes workloads
 - [ ] Rolling updates and rollbacks
 - [ ] Helm charts for TaskFlow
 - [ ] Further Kubernetes troubleshooting practice
 - [ ] Terraform and Infrastructure as Code
 - [ ] Cloud infrastructure deployment
+- [ ] Further backup and recovery testing with populated data
 - [ ] Final project documentation and job preparation
 
 ## Engineering Documentation
@@ -634,4 +726,4 @@ The goal is to build practical DevOps experience by operating a real application
 
 **Development → Testing → Containerization → CI/CD → Deployment → Monitoring → Troubleshooting → Infrastructure Automation**
 
-TaskFlow serves as a continuously evolving portfolio project demonstrating practical knowledge of Linux, networking, containers, CI/CD, monitoring, observability, Kubernetes, and infrastructure operations.
+TaskFlow serves as a continuously evolving portfolio project demonstrating practical knowledge of Linux, networking, containers, CI/CD, monitoring, observability, Kubernetes, security hardening, and infrastructure operations.
