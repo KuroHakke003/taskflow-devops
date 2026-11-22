@@ -24,7 +24,7 @@ The project is continuously evolving as new DevOps concepts and operational prac
 
 ### Docker Compose Application
 
-```text
+```
                           Client
                             |
                           HTTPS
@@ -42,11 +42,12 @@ The project is continuously evolving as new DevOps concepts and operational prac
                        PostgreSQL 16
                             |
                         postgres_data
+
 ```
 
 ### Monitoring Stack
 
-```text
+```
                          Host System
                             |
                        Node Exporter
@@ -60,11 +61,12 @@ The project is continuously evolving as new DevOps concepts and operational prac
                  Grafana         Alertmanager
                     |                 |
                 Dashboards      Telegram Alerts
+
 ```
 
 ### Kubernetes Environment (K3s)
 
-```text
+```
                          K3s Cluster
                             |
                       Namespace: taskflow
@@ -87,13 +89,17 @@ The project is continuously evolving as new DevOps concepts and operational prac
                    |
         Ingress allowed from Pods
         within namespace taskflow
+        and Traefik in kube-system
 
 PostgreSQL NetworkPolicy:
 Ingress allowed to TCP/5432
 from TaskFlow API Pods only
+
 ```
 
 The Kubernetes environment is a separate deployment from Docker Compose. Both environments have their own application workloads and database storage.
+
+The K3s environment also uses Traefik as an Ingress Controller. TaskFlow is routed through an Ingress using the hostname `taskflow.local`, with HTTPS configured using a self-signed TLS certificate.
 
 The API communicates with PostgreSQL through the Kubernetes Service named `db`.
 
@@ -103,30 +109,32 @@ NetworkPolicies restrict incoming traffic to the API and PostgreSQL workloads.
 
 ### Services
 
-| Component | Technology | Purpose |
-|---|---|---|
-| API | FastAPI, Uvicorn, SQLAlchemy, psycopg | Application and task endpoints |
-| Database | PostgreSQL 16 | Persistent application data |
-| Reverse proxy | Nginx | Routes incoming requests to the API |
-| Containers | Docker | Packages and isolates services |
-| Application orchestration | Docker Compose | Runs application and infrastructure services |
-| Kubernetes | K3s | Local Kubernetes environment |
-| Workload management | Deployments, StatefulSets, Pods | Manages application and database workloads |
-| Networking | Kubernetes Services, NetworkPolicies | Internal service discovery, communication, and ingress restrictions |
-| Configuration | ConfigMaps | Stores non-sensitive application configuration |
-| Secrets | Kubernetes Secrets | Stores database credentials |
-| Persistent storage | PersistentVolumeClaims | Provides persistent storage to Kubernetes workloads |
-| Autoscaling | Horizontal Pod Autoscaler | Scales API replicas based on CPU and memory utilization |
-| Container security | SecurityContext | Restricts container privileges and execution identity |
-| Kubernetes identity | ServiceAccount | Provides a dedicated workload identity |
-| CI/CD | GitHub Actions | Runs tests and builds/publishes container images |
-| Image registry | GitHub Container Registry | Stores the TaskFlow API image |
-| Remote access | Tailscale Serve | Provides private HTTPS access |
-| Metrics collection | Prometheus | Scrapes and stores monitoring metrics |
-| Host monitoring | Node Exporter | Exposes Linux system metrics |
-| Alerting | Alertmanager | Handles monitoring alerts |
-| Notifications | Telegram | Delivers alert notifications |
-| Visualization | Grafana | Creates dashboards and visualizes metrics |
+| **Component**             | **Technology**                        | **Purpose**                                                         |
+| ------------------------- | ------------------------------------- | ------------------------------------------------------------------- |
+| API                       | FastAPI, Uvicorn, SQLAlchemy, psycopg | Application and task endpoints                                      |
+| Database                  | PostgreSQL 16                         | Persistent application data                                         |
+| Reverse proxy             | Nginx                                 | Routes incoming requests to the API                                 |
+| Containers                | Docker                                | Packages and isolates services                                      |
+| Application orchestration | Docker Compose                        | Runs application and infrastructure services                        |
+| Kubernetes                | K3s                                   | Local Kubernetes environment                                        |
+| Ingress                  | Traefik, Kubernetes Ingress            | External HTTP/HTTPS routing to the API                              |
+| Packaging                 | Helm                                   | Templating and packaging Kubernetes resources                       |
+| Workload management       | Deployments, StatefulSets, Pods       | Manages application and database workloads                          |
+| Networking                | Kubernetes Services, NetworkPolicies  | Internal service discovery, communication, and ingress restrictions |
+| Configuration             | ConfigMaps                            | Stores non-sensitive application configuration                      |
+| Secrets                   | Kubernetes Secrets                    | Stores database credentials                                         |
+| Persistent storage        | PersistentVolumeClaims                | Provides persistent storage to Kubernetes workloads                 |
+| Autoscaling               | Horizontal Pod Autoscaler             | Scales API replicas based on CPU and memory utilization             |
+| Container security        | SecurityContext                       | Restricts container privileges and execution identity               |
+| Kubernetes identity       | ServiceAccount                        | Provides a dedicated workload identity                              |
+| CI/CD                     | GitHub Actions                        | Runs tests and builds/publishes container images                    |
+| Image registry            | GitHub Container Registry             | Stores the TaskFlow API image                                       |
+| Remote access             | Tailscale Serve                       | Provides private HTTPS access                                       |
+| Metrics collection        | Prometheus                            | Scrapes and stores monitoring metrics                               |
+| Host monitoring           | Node Exporter                         | Exposes Linux system metrics                                        |
+| Alerting                  | Alertmanager                          | Handles monitoring alerts                                           |
+| Notifications             | Telegram                              | Delivers alert notifications                                        |
+| Visualization             | Grafana                               | Creates dashboards and visualizes metrics                           |
 
 ## Technology Stack
 
@@ -138,7 +146,8 @@ NetworkPolicies restrict incoming traffic to the API and PostgreSQL workloads.
 - **CI/CD:** GitHub Actions
 - **Container registry:** GHCR
 - **Remote access:** Tailscale
-- **Kubernetes:** K3s, kubectl
+- **Kubernetes:** K3s, kubectl, Ingress, Traefik, TLS
+- **Packaging:** Helm
 - **Kubernetes workloads:** Deployments, StatefulSets, Pods
 - **Kubernetes networking:** ClusterIP Services, Headless Services, NetworkPolicies
 - **Kubernetes configuration:** ConfigMaps, Secrets
@@ -154,7 +163,7 @@ NetworkPolicies restrict incoming traffic to the API and PostgreSQL workloads.
 
 ## Repository Structure
 
-```text
+```
 .
 ├── app/
 │   ├── routers/
@@ -180,6 +189,14 @@ NetworkPolicies restrict incoming traffic to the API and PostgreSQL workloads.
 │   ├── networkpolicy-postgres.yaml
 │   └── networkpolicy-api.yaml
 │
+├── helm/
+│   └── taskflow/
+│       ├── Chart.yaml
+│       ├── values.yaml
+│       └── templates/
+│           ├── _helpers.tpl
+│           └── deployment.yaml
+│
 ├── docs/
 │   ├── architecture/
 │   ├── decisions/
@@ -194,6 +211,7 @@ NetworkPolicies restrict incoming traffic to the API and PostgreSQL workloads.
 ├── docker-compose.yml
 ├── nginx.conf
 └── requirements.txt
+
 ```
 
 The `k8s/` directory contains Kubernetes manifests used to configure the K3s environment.
@@ -210,7 +228,7 @@ Sensitive configuration files, including database credentials, are intentionally
 
 ### 1. Clone the repository
 
-```bash
+```
 git clone https://github.com/KuroHakke003/taskflow-devops.git
 cd taskflow-devops
 ```
@@ -225,25 +243,25 @@ The `.env` file contains local configuration and must not be committed.
 
 ### 3. Pull container images
 
-```bash
+```
 docker compose pull
 ```
 
 ### 4. Start the services
 
-```bash
+```
 docker compose up -d
 ```
 
 ### 5. Check service status
 
-```bash
+```
 docker compose ps
 ```
 
 ### 6. View application logs
 
-```bash
+```
 docker logs api_service
 ```
 
@@ -278,8 +296,9 @@ Pull the image before recreating or updating the running API container to ensure
 
 Published image:
 
-```text
+```
 ghcr.io/kurohakke003/taskflow-devops:latest
+
 ```
 
 ## Data Persistence
@@ -367,14 +386,16 @@ Queries explored so far include:
 
 Example query for calculating system uptime:
 
-```promql
+```
 time() - node_boot_time_seconds
+
 ```
 
 Example query for network traffic:
 
-```promql
+```
 rate(node_network_receive_bytes_total[5m])
+
 ```
 
 Monitoring and alerting are continuously evolving parts of the project.
@@ -388,6 +409,9 @@ The purpose of this environment is to understand how application workloads are d
 ### Kubernetes Concepts Implemented
 
 - K3s cluster initialization and node inspection.
+- Traefik Ingress Controller.
+- Ingress hostname-based routing.
+- TLS termination using a Kubernetes TLS Secret and a self-signed certificate.
 - Namespaces.
 - Pods and Deployments.
 - ClusterIP Services and internal DNS.
@@ -467,12 +491,12 @@ These probes allow Kubernetes to detect unhealthy containers and avoid sending t
 
 CPU and memory resources are configured for both application and database workloads.
 
-| Workload | Resource | Request | Limit |
-|---|---|---:|---:|
-| TaskFlow API | CPU | 100m | 500m |
-| TaskFlow API | Memory | 128Mi | 256Mi |
-| PostgreSQL | CPU | 100m | 500m |
-| PostgreSQL | Memory | 128Mi | 512Mi |
+| **Workload** | **Resource** | **Request** | **Limit** |
+| ------------ | ------------ | ----------- | --------- |
+| TaskFlow API | CPU          | 100m        | 500m      |
+| TaskFlow API | Memory       | 128Mi       | 256Mi     |
+| PostgreSQL   | CPU          | 100m        | 500m      |
+| PostgreSQL   | Memory       | 128Mi       | 512Mi     |
 
 Requests define the resources Kubernetes uses for scheduling decisions. Limits define the maximum resource consumption allowed for a container.
 
@@ -560,6 +584,7 @@ Two NetworkPolicies are configured in the `taskflow` namespace.
 - Selects API Pods using `app=taskflow-api`.
 - Allows ingress on TCP port `8000`.
 - Allows connections from Pods in the same namespace using an empty `podSelector`.
+- Allows ingress from Traefik in the `kube-system` namespace so traffic routed through the Ingress Controller can reach the API.
 - Does not restrict egress traffic.
 
 **Network isolation was tested:**
@@ -571,28 +596,59 @@ Two NetworkPolicies are configured in the `taskflow` namespace.
 
 These tests were performed using temporary Pods and a temporary namespace, which were removed after testing.
 
+### Ingress and TLS
+
+- Enabled and verified the Traefik Ingress Controller in K3s.
+- Created an Ingress resource for TaskFlow using the hostname `taskflow.local`.
+- Routed HTTP traffic to the `taskflow-api` Service on port `8000`.
+- Troubleshot a `502 Bad Gateway` caused by the API NetworkPolicy blocking traffic from Traefik.
+- Updated the API NetworkPolicy to allow traffic from Traefik in the `kube-system` namespace.
+- Configured local hostname resolution for `taskflow.local` on the VM and Mac.
+- Generated a self-signed TLS certificate and private key using OpenSSL, including a Subject Alternative Name (SAN) for `taskflow.local`.
+- Created the Kubernetes TLS Secret `taskflow-tls` and configured the Ingress to use it.
+- Verified HTTP and HTTPS access to TaskFlow, including the `/docs` endpoint.
+- Inspected the certificate using OpenSSL and tested HTTPS access from the Mac browser.
+- Learned why self-signed certificates trigger trust warnings and why `curl -k` was used during testing.
+
 ### Current Kubernetes Status
 
-| Resource | Name | Status |
-|---|---|---|
-| Namespace | `taskflow` | Configured |
-| API Deployment | `taskflow-api` | 2/2 Ready |
-| API Service | `taskflow-api` | Configured |
-| PostgreSQL StatefulSet | `postgres` | 1/1 Ready |
-| PostgreSQL Pod | `postgres-0` | Running |
-| Database Service | `db` | Configured |
-| Headless Service | `postgres-headless` | Configured |
-| PersistentVolumeClaim | `postgres-pvc` | Bound, 2Gi |
-| ConfigMap | `taskflow-config` | Configured |
-| Secret | `postgres-secret` | Configured |
-| ServiceAccount | `taskflow-api` | Configured |
-| Horizontal Pod Autoscaler | `api-hpa` | Active, 2 replicas |
-| PostgreSQL NetworkPolicy | `postgres-network-policy` | Applied and tested |
-| API NetworkPolicy | `taskflow-api-network-policy` | Applied and tested |
+| **Resource**              | **Name**                      | **Status**         |
+| ------------------------- | ----------------------------- | ------------------ |
+| Namespace                 | `taskflow`                    | Configured         |
+| API Deployment            | `taskflow-api`                | 2/2 Ready          |
+| API Service               | `taskflow-api`                | Configured         |
+| PostgreSQL StatefulSet    | `postgres`                    | 1/1 Ready          |
+| PostgreSQL Pod            | `postgres-0`                  | Running            |
+| Database Service          | `db`                          | Configured         |
+| Headless Service          | `postgres-headless`           | Configured         |
+| PersistentVolumeClaim     | `postgres-pvc`                | Bound, 2Gi         |
+| ConfigMap                 | `taskflow-config`             | Configured         |
+| Secret                    | `postgres-secret`             | Configured         |
+| ServiceAccount            | `taskflow-api`                | Configured         |
+| Horizontal Pod Autoscaler | `api-hpa`                     | Active, 2 replicas |
+| PostgreSQL NetworkPolicy  | `postgres-network-policy`     | Applied and tested |
+| API NetworkPolicy         | `taskflow-api-network-policy` | Applied and tested |
 
 The API and PostgreSQL workloads are running in the `taskflow` namespace. The HPA has been verified through a scale-up test, and the network isolation policies have been tested.
 
 The Kubernetes environment remains a learning and portfolio environment rather than a production-ready deployment.
+
+## Helm
+
+A Helm chart for TaskFlow is being developed in `helm/taskflow/` to gradually template and package Kubernetes resources.
+
+### Current Helm Progress
+
+- Initialized the chart structure and configured `Chart.yaml`.
+- Created reusable template helpers for chart names, labels, and selectors in `_helpers.tpl`.
+- Started templating the API Deployment.
+- Parameterized the replica count, image, pull policy, service port, resources, and security settings through `values.yaml`.
+- Added Pod-level security settings to the Deployment template (`runAsNonRoot`, `runAsUser`, `runAsGroup`, and `fsGroup`).
+- Added container-level security settings (`allowPrivilegeEscalation: false`, read-only root filesystem, and dropped capabilities).
+- Included resource requests and limits, environment references, and liveness, readiness, and startup probes in the template.
+- Validated the chart with `helm lint` and inspected rendered output using `helm template`.
+
+The chart is still under development and has not yet been used to migrate the existing cluster resources.
 
 ## Operations and Troubleshooting
 
@@ -637,12 +693,12 @@ The four processes continued running even after the K3s service had been stopped
 
 After terminating the processes, CPU utilization dropped significantly:
 
-| Metric | Before | After |
-|---|---:|---:|
-| CPU 0 | 100% | 2.8% |
-| CPU 1 | 100% | 0.8% |
-| Load average (1 min) | 5.04 | 3.87 |
-| RAM | 927 MB | 893 MB |
+| **Metric**           | **Before** | **After** |
+| -------------------- | ---------- | --------- |
+| CPU 0                | 100%       | 2.8%      |
+| CPU 1                | 100%       | 0.8%      |
+| Load average (1 min) | 5.04       | 3.87      |
+| RAM                  | 927 MB     | 893 MB    |
 
 This confirmed that the four runaway processes were responsible for the immediate CPU overload.
 
@@ -696,13 +752,17 @@ The project emphasizes not only deploying services but also understanding failur
 - [x] PostgreSQL NetworkPolicy
 - [x] API NetworkPolicy
 - [x] Network isolation testing
+- [x] Traefik Ingress Controller and hostname-based Ingress routing
+- [x] TLS configuration and HTTPS testing with a self-signed certificate
+- [x] Helm chart initialization and API Deployment template rendering
 
 ### Planned
 
-- [ ] Kubernetes Ingress and external routing
-- [ ] TLS configuration for Kubernetes workloads
+- [x] Kubernetes Ingress and external routing
+- [x] TLS configuration for Kubernetes workloads
 - [ ] Rolling updates and rollbacks
-- [ ] Helm charts for TaskFlow
+- [ ] Complete Helm chart templates for TaskFlow resources and validate them
+- [ ] Test Helm release installation, upgrades, and rollbacks
 - [ ] Further Kubernetes troubleshooting practice
 - [ ] Terraform and Infrastructure as Code
 - [ ] Cloud infrastructure deployment
