@@ -1,224 +1,207 @@
 # TaskFlow
 
-A production-oriented task management API used to practice building, deploying, monitoring, and operating a containerized application with real-world DevOps tools and workflows.
+A production-oriented task management API used as a hands-on DevOps learning and portfolio project. TaskFlow is used to practice building, containerizing, deploying, securing, monitoring, troubleshooting, and automating an application across Docker Compose and Kubernetes environments.
 
-The repository documents the engineering work as the project evolves, including infrastructure decisions, CI/CD, deployment, monitoring, observability, Kubernetes, security hardening, and incident troubleshooting.
-
-This is a hands-on learning and portfolio project focused on understanding how applications and infrastructure behave in real operating environments.
+The project documents practical infrastructure work, engineering decisions, incidents, and lessons learned while progressively building toward cloud infrastructure and Kubernetes deployment in AWS.
 
 ## Project Overview
 
-TaskFlow is a task management application built with FastAPI and PostgreSQL.
+TaskFlow is a task management API built with FastAPI and PostgreSQL.
 
-The primary application deployment uses Docker and Docker Compose, with Nginx acting as a reverse proxy in front of the API. The API image is built and published to GitHub Container Registry (GHCR) through GitHub Actions.
+The project has two deployment environments:
 
-Remote access is provided through Tailscale Serve, allowing private HTTPS access to the application.
+- **Docker Compose:** the API, PostgreSQL and Nginx reverse proxy, with private remote access through Tailscale Serve.
+- **K3s:** a Kubernetes deployment with two API replicas, PostgreSQL StatefulSet and persistent storage, Traefik Ingress, TLS, NetworkPolicies, resource management, and autoscaling.
 
-The project also includes a dedicated monitoring stack built with Prometheus, Node Exporter, Alertmanager, and Grafana. It collects infrastructure metrics, visualizes system performance, and sends alert notifications to Telegram.
+The project also includes monitoring and alerting using Prometheus, Node Exporter, Alertmanager, Grafana and Telegram. A GitHub Actions pipeline now runs tests, builds and publishes Docker images to GHCR, and deploys a specific image revision to K3s over private Tailscale connectivity and restricted SSH.
 
-Additionally, the project includes a Kubernetes environment running on K3s. It is used to practice workload orchestration, service discovery, configuration management, persistent storage, autoscaling, security controls, network isolation, and troubleshooting.
+## Architecture
 
-The project is continuously evolving as new DevOps concepts and operational practices are introduced.
+### Docker Compose
 
-## Current Architecture
-
-### Docker Compose Application
-
-```
-                          Client
-                            |
-                          HTTPS
-                            |
-                      Tailscale Serve
-                            |
-                          Nginx (80)
-                            |
-                     Docker Compose Network
-                            |
-                        FastAPI (8000)
-                            |
-                       Docker DNS: db
-                            |
-                       PostgreSQL 16
-                            |
-                        postgres_data
-
+```text
+                         Client
+                           |
+                         HTTPS
+                           |
+                     Tailscale Serve
+                           |
+                        Nginx (80)
+                           |
+                  Docker Compose Network
+                           |
+                       FastAPI (8000)
+                           |
+                      PostgreSQL 16
+                           |
+                    postgres_data
 ```
 
-### Monitoring Stack
+### Monitoring
 
-```
+```text
                          Host System
-                            |
-                       Node Exporter
-                            |
-                      System Metrics
-                            |
-                         Prometheus
-                            |
-                    +--------+--------+
-                    |                 |
-                 Grafana         Alertmanager
-                    |                 |
-                Dashboards      Telegram Alerts
-
+                           |
+                      Node Exporter
+                           |
+                     System Metrics
+                           |
+                       Prometheus
+                           |
+                  +--------+--------+
+                  |                 |
+               Grafana         Alertmanager
+                  |                 |
+              Dashboards      Telegram Alerts
 ```
 
-### Kubernetes Environment (K3s)
+### Kubernetes (K3s)
 
-```
+```text
                          K3s Cluster
-                            |
-                      Namespace: taskflow
-                            |
-                   +----------+----------+
-                   |                     |
-                   v                     v
-              TaskFlow API           PostgreSQL
-               Deployment            StatefulSet
-               (2 replicas)          (1 replica)
-                   |                     |
-                   v                     v
-              API Service          Headless Service
-                   |                     |
-                   |                 postgres-0
-                   |                     |
-                   |                  postgres-pvc
-                   |
-              API NetworkPolicy
-                   |
-        Ingress allowed from Pods
-        within namespace taskflow
-        and Traefik in kube-system
+                           |
+                    Namespace: taskflow
+                           |
+                  +--------+---------+
+                  |                  |
+             TaskFlow API        PostgreSQL
+              Deployment          StatefulSet
+              (2 replicas)          (1 pod)
+                  |                  |
+             API Service       db / Headless Service
+                  |                  |
+              Ingress             postgres-0
+              (Traefik)              |
+                                  postgres-pvc
 
-PostgreSQL NetworkPolicy:
-Ingress allowed to TCP/5432
-from TaskFlow API Pods only
-
+       NetworkPolicies restrict workload ingress
 ```
 
-The Kubernetes environment is a separate deployment from Docker Compose. Both environments have their own application workloads and database storage.
-
-The K3s environment also uses Traefik as an Ingress Controller. TaskFlow is routed through an Ingress using the hostname `taskflow.local`, with HTTPS configured using a self-signed TLS certificate.
-
-The API communicates with PostgreSQL through the Kubernetes Service named `db`.
-
-The PostgreSQL StatefulSet uses a headless Service for stable network identity and a PersistentVolumeClaim for persistent storage.
-
-NetworkPolicies restrict incoming traffic to the API and PostgreSQL workloads.
-
-### Services
-
-| **Component**             | **Technology**                        | **Purpose**                                                         |
-| ------------------------- | ------------------------------------- | ------------------------------------------------------------------- |
-| API                       | FastAPI, Uvicorn, SQLAlchemy, psycopg | Application and task endpoints                                      |
-| Database                  | PostgreSQL 16                         | Persistent application data                                         |
-| Reverse proxy             | Nginx                                 | Routes incoming requests to the API                                 |
-| Containers                | Docker                                | Packages and isolates services                                      |
-| Application orchestration | Docker Compose                        | Runs application and infrastructure services                        |
-| Kubernetes                | K3s                                   | Local Kubernetes environment                                        |
-| Ingress                  | Traefik, Kubernetes Ingress            | External HTTP/HTTPS routing to the API                              |
-| Packaging                 | Helm                                   | Templating and packaging Kubernetes resources                       |
-| Workload management       | Deployments, StatefulSets, Pods       | Manages application and database workloads                          |
-| Networking                | Kubernetes Services, NetworkPolicies  | Internal service discovery, communication, and ingress restrictions |
-| Configuration             | ConfigMaps                            | Stores non-sensitive application configuration                      |
-| Secrets                   | Kubernetes Secrets                    | Stores database credentials                                         |
-| Persistent storage        | PersistentVolumeClaims                | Provides persistent storage to Kubernetes workloads                 |
-| Autoscaling               | Horizontal Pod Autoscaler             | Scales API replicas based on CPU and memory utilization             |
-| Container security        | SecurityContext                       | Restricts container privileges and execution identity               |
-| Kubernetes identity       | ServiceAccount                        | Provides a dedicated workload identity                              |
-| CI/CD                     | GitHub Actions                        | Runs tests and builds/publishes container images                    |
-| Image registry            | GitHub Container Registry             | Stores the TaskFlow API image                                       |
-| Remote access             | Tailscale Serve                       | Provides private HTTPS access                                       |
-| Metrics collection        | Prometheus                            | Scrapes and stores monitoring metrics                               |
-| Host monitoring           | Node Exporter                         | Exposes Linux system metrics                                        |
-| Alerting                  | Alertmanager                          | Handles monitoring alerts                                           |
-| Notifications             | Telegram                              | Delivers alert notifications                                        |
-| Visualization             | Grafana                               | Creates dashboards and visualizes metrics                           |
+The Kubernetes environment is separate from the Docker Compose deployment, with independent application workloads and database storage. Traefik routes traffic through an Ingress using `taskflow.local`, with TLS configured using a self-signed certificate.
 
 ## Technology Stack
 
-- **Application:** Python 3.12, FastAPI, Uvicorn
-- **Database:** PostgreSQL 16
-- **Database access:** SQLAlchemy 2, psycopg
-- **Containers:** Docker, Docker Compose
-- **Reverse proxy:** Nginx
-- **CI/CD:** GitHub Actions
-- **Container registry:** GHCR
-- **Remote access:** Tailscale
-- **Kubernetes:** K3s, kubectl, Ingress, Traefik, TLS
-- **Packaging:** Helm
-- **Kubernetes workloads:** Deployments, StatefulSets, Pods
-- **Kubernetes networking:** ClusterIP Services, Headless Services, NetworkPolicies
-- **Kubernetes configuration:** ConfigMaps, Secrets
-- **Kubernetes security:** SecurityContext, ServiceAccounts, RBAC principles
-- **Persistent storage:** PersistentVolumes, PersistentVolumeClaims, local-path
-- **Autoscaling:** Horizontal Pod Autoscaler (HPA)
-- **Monitoring:** Prometheus
-- **Metrics exporter:** Node Exporter
-- **Visualization:** Grafana
-- **Alerting:** Alertmanager
-- **Notifications:** Telegram
-- **Query language:** PromQL
+| Area | Technologies |
+|---|---|
+| Application | Python 3.12, FastAPI, Uvicorn |
+| Database | PostgreSQL 16 |
+| Database access | SQLAlchemy 2, psycopg |
+| Containers | Docker, Docker Compose |
+| Reverse proxy | Nginx |
+| CI/CD | GitHub Actions |
+| Container registry | GitHub Container Registry (GHCR) |
+| Private connectivity | Tailscale, SSH |
+| Kubernetes | K3s, kubectl, Ingress, Traefik |
+| Packaging | Helm |
+| Kubernetes workloads | Deployments, StatefulSets, Pods |
+| Networking | ClusterIP Services, Headless Services, NetworkPolicies |
+| Configuration | ConfigMaps, Kubernetes Secrets |
+| Storage | PersistentVolumes, PersistentVolumeClaims, local-path |
+| Scaling | Horizontal Pod Autoscaler (HPA) |
+| Container security | SecurityContext, non-root containers, capability restrictions |
+| Monitoring | Prometheus, Node Exporter |
+| Visualization | Grafana |
+| Alerting | Alertmanager, Telegram |
+| Metrics queries | PromQL |
 
 ## Repository Structure
 
-```
+```text
 .
 ├── app/
 │   ├── routers/
+│   │   ├── __init__.py
+│   │   └── tasks.py
 │   ├── config.py
 │   ├── database.py
+│   ├── __init__.py
 │   ├── main.py
 │   ├── models.py
 │   └── schemas.py
-│
 ├── docker/
 │   └── nginx/
-│
-├── k8s/
-│   ├── deployment.yaml
-│   ├── api-service.yaml
-│   ├── configmap.yaml
-│   ├── hpa.yaml
-│   ├── postgres-statefulset.yaml
-│   ├── postgres-service.yaml
-│   ├── postgres-headless.yaml
-│   ├── postgres-pvc.yaml
-│   ├── serviceaccount.yaml
-│   ├── networkpolicy-postgres.yaml
-│   └── networkpolicy-api.yaml
-│
-├── helm/
-│   └── taskflow/
-│       ├── Chart.yaml
-│       ├── values.yaml
-│       └── templates/
-│           ├── _helpers.tpl
-│           └── deployment.yaml
-│
+│       └── compose.yaml
 ├── docs/
 │   ├── architecture/
+│   │   └── overview.md
 │   ├── decisions/
 │   ├── incidents/
 │   └── learning-log/
-│
+│       ├── 2026-11-03.md
+│       ├── 2026-11-04.md
+│       ├── 2026-11-05.md
+│       ├── 2026-11-07.md
+│       ├── 2026-11-08.md
+│       ├── 2026-11-09.md
+│       ├── 2026-11-10.md
+│       ├── 2026-11-11.md
+│       ├── 2026-11-12.md
+│       ├── 2026-11-14.md
+│       ├── 2026-11-16.md
+│       ├── 2026-11-18.md
+│       ├── 2026-11-19.md
+│       ├── 2026-11-21.md
+│       ├── 2026-11-22.md
+│       └── 2026-11-23.md
+├── helm/
+│   └── taskflow/
+│       ├── templates/
+│       │   ├── configmap.yaml
+│       │   ├── deployment.yaml
+│       │   ├── _helpers.tpl
+│       │   ├── ingress.yaml
+│       │   ├── postgres-headless.yaml
+│       │   ├── postgres-service.yaml
+│       │   ├── postgres-statefulset.yaml
+│       │   ├── serviceaccount.yaml
+│       │   └── service.yaml
+│       ├── Chart.yaml
+│       └── values.yaml
+├── k8s/
+│   ├── api-service.yaml
+│   ├── configmap.yaml
+│   ├── deployment.yaml
+│   ├── hpa.yaml
+│   ├── ingress.yaml
+│   ├── namespace.yaml
+│   ├── networkpolicy-api.yaml
+│   ├── networkpolicy-postgres.yaml
+│   ├── postgres-headless.yaml
+│   ├── postgres-pvc.yaml
+│   ├── postgres-secret.yaml
+│   ├── postgres-service.yaml
+│   ├── postgres-statefulset.yaml
+│   └── serviceaccount.yaml
+├── prometheus/
+│   ├── rules/
+│   │   └── alerts.yml
+│   ├── alertmanager.yml
+│   └── prometheus.yml
 ├── tests/
-│
-├── .env.example
-├── .gitignore
-├── Dockerfile
+│   ├── __init__.py
+│   └── test_health.py
+├── secrets/
+│   └── telegram_bot_token
 ├── docker-compose.yml
+├── Dockerfile
+├── index.html
 ├── nginx.conf
-└── requirements.txt
-
+├── README.md
+├── requirements.txt
+└── taskflow-backup.sql
 ```
 
-The `k8s/` directory contains Kubernetes manifests used to configure the K3s environment.
+- `app/` — FastAPI application, database configuration, models, schemas and task routes.
+- `docker/` and the root Compose files — Docker Compose setup and Nginx-related configuration.
+- `k8s/` — Kubernetes manifests for the K3s deployment.
+- `helm/taskflow/` — Helm chart templates and chart values. The chart has been linted and rendered locally; it has not been installed as a Helm release in the live cluster.
+- `prometheus/` — Prometheus and Alertmanager configuration, including alert rules.
+- `tests/` — application tests used by CI.
+- `docs/` — architecture documentation, decision records, incident notes and dated learning logs.
+- `secrets/` and `taskflow-backup.sql` — local sensitive material. These must not be committed or exposed publicly; ensure they are excluded by `.gitignore` and rotate any credentials if they were exposed.
 
-Sensitive configuration files, including database credentials, are intentionally excluded from version control.
 
-## Running the Project
+## Running the Docker Compose Environment
 
 ### Prerequisites
 
@@ -228,497 +211,375 @@ Sensitive configuration files, including database credentials, are intentionally
 
 ### 1. Clone the repository
 
-```
+```bash
 git clone https://github.com/KuroHakke003/taskflow-devops.git
 cd taskflow-devops
 ```
 
 ### 2. Configure environment variables
 
-Create a local `.env` file based on `.env.example` and adjust values if needed.
+Create `.env` from `.env.example` and adjust values as needed. The Compose deployment uses the database service name `db` as the database hostname. Do not commit `.env`.
 
-The Compose deployment uses the database service name `db` as the database hostname.
+### 3. Pull and start services
 
-The `.env` file contains local configuration and must not be committed.
-
-### 3. Pull container images
-
-```
+```bash
 docker compose pull
-```
-
-### 4. Start the services
-
-```
 docker compose up -d
 ```
 
-### 5. Check service status
+### 4. Check status and logs
 
-```
+```bash
 docker compose ps
-```
-
-### 6. View application logs
-
-```
 docker logs api_service
 ```
 
 ## Application Access
 
-The Docker Compose API is exposed to the host through Nginx on port `80`.
+In the Docker Compose environment, Nginx is exposed on host port `80`. The API container listens internally on port `8000` and is not directly published to the host in the current configuration.
 
-The API container itself listens on port `8000` internally and is not published directly to the host in the current Compose setup.
+| Endpoint | Purpose |
+|---|---|
+| `/docs` | Swagger UI |
+| `/openapi.json` | OpenAPI schema |
+| `/tasks` | Task management endpoints |
+| `/health/live` | Liveness check |
+| `/health/ready` | Readiness check |
 
-Available API endpoints:
-
-- `/docs` — Swagger UI
-- `/openapi.json` — OpenAPI schema
-- `/tasks` — Task management endpoints
-- `/health/live` — Kubernetes liveness check
-- `/health/ready` — Kubernetes readiness check
-
-Remote access is available through the configured Tailscale Serve HTTPS address.
+Private remote access to the Compose deployment is provided through the configured Tailscale Serve HTTPS address.
 
 ## CI/CD
 
-GitHub Actions is configured to:
+The GitHub Actions workflow is located at `.github/workflows/cd.yml` and is named **TaskFlow CI/CD**.
 
-1. Run automated tests using Python 3.12 and a PostgreSQL 16 service.
-2. Build the TaskFlow Docker image.
-3. Authenticate to GitHub Container Registry using `GITHUB_TOKEN`.
-4. Publish the image with a `latest` tag and a commit-specific tag.
+### Pipeline
 
-The deployment Compose configuration uses the published GHCR image rather than building the API image on the VM.
+On pushes and pull requests targeting `main`, the workflow runs tests using Python 3.12 and PostgreSQL 16. For pushes to `main`, successful tests are followed by a Docker image build and publication to GHCR, then an automated deployment to K3s.
 
-Pull the image before recreating or updating the running API container to ensure the latest version is used.
-
-Published image:
-
+```text
+Push to main
+    |
+    v
+GitHub Actions
+    |
+    v
+Run pytest + PostgreSQL service
+    |
+    v
+Build Docker image
+    |
+    v
+Publish to GHCR (latest + commit SHA)
+    |
+    v
+Connect runner to Tailscale
+    |
+    v
+Restricted SSH to deployment host
+    |
+    v
+Update K3s Deployment image
+    |
+    v
+Wait for rollout status
 ```
-ghcr.io/kurohakke003/taskflow-devops:latest
 
+### CI: testing
+
+- Python 3.12 environment.
+- PostgreSQL 16 service container with a health check.
+- Dependency installation from `requirements.txt`.
+- Automated tests using `pytest`.
+
+### Image build and publishing
+
+- Docker image builds after the test job succeeds.
+- Images are published to GHCR.
+- The workflow publishes both `latest` and the full Git commit SHA as image tags.
+- Publishing is restricted to pushes to `main`.
+
+Image repository:
+
+```text
+ghcr.io/kurohakke003/taskflow-devops
 ```
+
+### Automated K3s deployment
+
+The deployment job connects to the K3s host through Tailscale, then uses SSH to invoke a restricted deployment command.
+
+- Tailscale connects the GitHub Actions runner to the private tailnet.
+- SSH uses a dedicated `taskflow-deploy` account and dedicated key.
+- The authorized key is restricted to a forced command through an SSH wrapper.
+- The wrapper accepts a deployment command containing a valid commit SHA.
+- A restricted sudo rule permits the deployment user to execute the dedicated deployment script.
+- The script updates the `taskflow-api` container image in the `taskflow-api` Deployment.
+- `kubectl rollout status` waits for rollout completion.
+
+The workflow deploys a commit-specific image tag rather than relying on `latest` for the Kubernetes update.
+
+### Successful deployment verification
+
+The pipeline has been successfully executed end-to-end. The K3s Deployment was updated and the rollout completed successfully. The API Deployment was subsequently verified with two ready replicas, and both replacement API Pods were Running and Ready.
 
 ## Data Persistence
 
-The Docker Compose PostgreSQL service stores its data in the named Docker volume `postgres_data`.
+### Docker Compose
+
+The Compose PostgreSQL service stores its data in the named Docker volume `postgres_data`.
 
 - `docker compose down` removes containers and the Compose network but preserves named volumes.
-- `docker compose down -v` also removes Compose-managed named volumes and their stored database data.
+- `docker compose down -v` also removes named volumes and their stored database data. Use it only when intentionally deleting that data.
 
-Use the second command only when intentionally deleting the database volume and its contents.
+Prometheus uses `prometheus_data` for collected metrics. Grafana stores application data under `/var/lib/grafana`.
 
-Prometheus uses the named volume `prometheus_data` to retain collected metrics across container recreation.
+### Kubernetes
 
-Grafana stores its application data under `/var/lib/grafana`.
-
-### Kubernetes Storage
-
-The Kubernetes PostgreSQL workload uses a PersistentVolumeClaim named `postgres-pvc`.
+The Kubernetes PostgreSQL workload uses `postgres-pvc`:
 
 - Storage request: `2Gi`
 - Access mode: `ReadWriteOnce`
 - Storage class: K3s `local-path`
 - Status: `Bound`
 
-The PVC is used by the PostgreSQL StatefulSet. Persistent storage resources should not be deleted during routine troubleshooting because doing so may result in data loss.
+The PVC is attached to the PostgreSQL StatefulSet. Persistent storage resources should not be removed during routine troubleshooting unless data deletion is intentional.
 
 ## Monitoring and Observability
 
-The project includes a monitoring stack built around Prometheus, Node Exporter, Alertmanager, Grafana, and Telegram notifications.
+The monitoring stack consists of Prometheus, Node Exporter, Alertmanager, Grafana and Telegram notifications.
 
-### Prometheus
+### Prometheus and Node Exporter
 
-Prometheus is responsible for collecting and storing time-series metrics from configured targets.
-
-Current learning objectives include:
-
-- Understanding Prometheus architecture and scrape targets.
-- Configuring metric collection.
-- Understanding time-series data and metric naming.
-- Working with PromQL.
-- Analyzing metric behavior over time.
-
-### Node Exporter
-
-Node Exporter exposes Linux host-level metrics for Prometheus to scrape.
-
-Metrics explored include:
-
-- CPU and system resource information.
-- Memory and filesystem metrics.
-- Network traffic and interface statistics.
-- System uptime and boot time.
-
-Node Exporter runs with access to host-level system information so that metrics describe the VM rather than only its own container.
+Prometheus collects and stores time-series metrics from configured targets. Node Exporter exposes Linux host-level metrics, including CPU, memory, filesystem, network and system information.
 
 ### Grafana
 
-Grafana is used to visualize metrics collected by Prometheus.
-
-The monitoring dashboard includes visualizations for:
-
-- CPU usage.
-- RAM usage.
-- Disk usage.
-- Host resource utilization over time.
-
-Grafana helps identify abnormal resource consumption and understand system behavior through metric visualization.
+Grafana visualizes collected metrics through dashboards, including host CPU, memory, disk usage and resource utilization over time.
 
 ### Alertmanager and Telegram
 
-Alertmanager handles monitoring alerts and delivers notifications to Telegram.
-
-The project includes a `HighCPUUsage` alert that detects unusually high CPU consumption.
-
-A successful Telegram notification confirmed that the alert delivery pipeline was operational during the November 16 incident.
+Alertmanager handles alerts and routes notifications to Telegram. A `HighCPUUsage` alert has been configured and tested, including successful notification delivery.
 
 ### PromQL
 
-Queries explored so far include:
+Queries explored include `rate()`, `time()`, `node_boot_time_seconds` and `node_network_receive_bytes_total`.
 
-- `rate()` — calculating the per-second average rate of increase of a counter over a specified range.
-- `time()` — returning the current query evaluation timestamp.
-- `node_boot_time_seconds` — identifying the system boot timestamp.
-- `node_network_receive_bytes_total` — examining cumulative network traffic received by an interface.
+Example uptime query:
 
-Example query for calculating system uptime:
-
-```
+```promql
 time() - node_boot_time_seconds
-
 ```
 
-Example query for network traffic:
+Example network receive rate:
 
-```
+```promql
 rate(node_network_receive_bytes_total[5m])
-
 ```
 
-Monitoring and alerting are continuously evolving parts of the project.
+Monitoring and alerting have been implemented and are part of the operational capabilities practiced in this project.
 
-## Kubernetes and Container Orchestration
+## Kubernetes (K3s)
 
-The project includes a Kubernetes environment running on K3s.
+The K3s environment is deployed in a dedicated `taskflow` namespace.
 
-The purpose of this environment is to understand how application workloads are deployed, configured, secured, scaled, and operated using Kubernetes resources.
-
-### Kubernetes Concepts Implemented
+### Implemented Kubernetes concepts
 
 - K3s cluster initialization and node inspection.
-- Traefik Ingress Controller.
-- Ingress hostname-based routing.
-- TLS termination using a Kubernetes TLS Secret and a self-signed certificate.
-- Namespaces.
-- Pods and Deployments.
-- ClusterIP Services and internal DNS.
-- Headless Services.
+- Traefik Ingress Controller, Ingress routing and TLS.
+- Namespaces, Pods, Deployments and Services.
 - ConfigMaps and Secrets.
 - PersistentVolumes and PersistentVolumeClaims.
 - Liveness and readiness probes.
 - CPU and memory requests and limits.
-- Metrics API and resource monitoring with `kubectl top`.
-- Horizontal Pod Autoscaler (HPA).
-- PostgreSQL StatefulSet.
-- PostgreSQL backup and restore testing.
+- Metrics API and resource inspection using `kubectl top`.
+- Horizontal Pod Autoscaler (HPA) and scale-up testing.
+- PostgreSQL StatefulSet and headless Service.
 - ServiceAccounts and token mount control.
 - RBAC and least-privilege principles.
 - Container and Pod security hardening.
 - NetworkPolicies and network isolation testing.
 
-### Current Kubernetes Architecture
+### TaskFlow API
 
-The cluster uses a dedicated namespace named `taskflow`.
-
-#### TaskFlow API
-
-- Managed by a Deployment named `taskflow-api`.
-- Exposed internally through the `taskflow-api` ClusterIP Service.
-- Uses a ConfigMap for non-sensitive application configuration.
-- Uses a Kubernetes Secret for PostgreSQL credentials.
-- Configured with liveness and readiness probes.
-- Has CPU and memory requests and limits.
+- Deployment: `taskflow-api`.
+- Service: `taskflow-api` (ClusterIP).
+- Configuration: `taskflow-config` ConfigMap.
+- Database credentials: `postgres-secret` Secret.
+- Liveness and readiness probes.
+- CPU and memory requests and limits.
 - Runs as a non-root user.
-- Uses a dedicated ServiceAccount.
-- Does not automatically mount a ServiceAccount token.
-- Has privilege escalation disabled and Linux capabilities dropped.
-- Scaled through an HPA based on CPU and memory utilization.
-- Protected by a NetworkPolicy that restricts ingress to Pods in the same namespace.
+- Dedicated ServiceAccount with automatic token mounting disabled.
+- HPA scaling based on CPU and memory utilization.
+- NetworkPolicy restricts ingress to allowed in-namespace workloads and Traefik.
 
-#### PostgreSQL
+### PostgreSQL
 
-- Managed by a StatefulSet named `postgres`.
-- Uses PostgreSQL 16.
-- Uses the `postgres-secret` Kubernetes Secret for credentials.
-- Uses the `postgres-pvc` PersistentVolumeClaim.
-- Uses a headless Service named `postgres-headless` for stable Pod identity.
-- Is reachable by the API through the regular `db` ClusterIP Service.
-- Has CPU and memory requests and limits.
-- Protected by a NetworkPolicy that restricts ingress to TaskFlow API Pods on TCP port `5432`.
+- StatefulSet: `postgres`.
+- PostgreSQL 16.
+- Credentials stored in `postgres-secret`.
+- PVC: `postgres-pvc`.
+- Headless Service: `postgres-headless`.
+- Application connectivity through the `db` ClusterIP Service.
+- CPU and memory requests and limits.
+- NetworkPolicy allows PostgreSQL ingress from TaskFlow API Pods on TCP/5432.
 
-### Configuration Management
+### Configuration
 
-A ConfigMap named `taskflow-config` stores non-sensitive application settings, including:
+The `taskflow-config` ConfigMap contains non-sensitive application settings such as `APP_NAME`, `APP_ENV`, `APP_HOST` and `APP_PORT`. The `postgres-secret` Secret contains database settings and credentials. Secret values are not committed to the repository.
 
-- `APP_NAME`
-- `APP_ENV`
-- `APP_HOST`
-- `APP_PORT`
+### Health checks and resources
 
-A Secret named `postgres-secret` stores database configuration and credentials:
+The API Deployment uses `/health/live` for liveness and `/health/ready` for readiness.
 
-- `POSTGRES_DB`
-- `POSTGRES_USER`
-- `POSTGRES_PASSWORD`
-
-The API receives database credentials through Secret references and constructs its database connection URL using environment variable substitution.
-
-Sensitive Secret manifests and credentials are not committed to the repository.
-
-### Health Checks
-
-The API Deployment uses two Kubernetes probes:
-
-- **Liveness probe:** `/health/live` — checks whether the application process is alive.
-- **Readiness probe:** `/health/ready` — checks whether the application is ready to receive traffic.
-
-These probes allow Kubernetes to detect unhealthy containers and avoid sending traffic to Pods that are not ready.
-
-### Resource Requests and Limits
-
-CPU and memory resources are configured for both application and database workloads.
-
-| **Workload** | **Resource** | **Request** | **Limit** |
-| ------------ | ------------ | ----------- | --------- |
-| TaskFlow API | CPU          | 100m        | 500m      |
-| TaskFlow API | Memory       | 128Mi       | 256Mi     |
-| PostgreSQL   | CPU          | 100m        | 500m      |
-| PostgreSQL   | Memory       | 128Mi       | 512Mi     |
-
-Requests define the resources Kubernetes uses for scheduling decisions. Limits define the maximum resource consumption allowed for a container.
+| Workload | Resource | Request | Limit |
+|---|---|---:|---:|
+| TaskFlow API | CPU | 100m | 500m |
+| TaskFlow API | Memory | 128Mi | 256Mi |
+| PostgreSQL | CPU | 100m | 500m |
+| PostgreSQL | Memory | 128Mi | 512Mi |
 
 ### Horizontal Pod Autoscaler
 
-The API is configured with a Horizontal Pod Autoscaler named `api-hpa`.
+The API HPA (`api-hpa`) has been configured and tested:
 
-Current configuration:
-
-- Target: Deployment `taskflow-api`
 - Minimum replicas: 1
 - Maximum replicas: 3
 - CPU utilization target: 50% of requested CPU
 - Memory utilization target: 70% of requested memory
 
-The HPA uses resource metrics to adjust the number of API replicas based on CPU and memory utilization.
+A load test using a temporary BusyBox Pod successfully triggered scaling from one replica up to the configured maximum of three. PostgreSQL is not scaled by this HPA.
 
-A load test using a temporary BusyBox Pod successfully triggered scale-up from one API replica to the configured maximum of three replicas.
+### Security hardening
 
-PostgreSQL is not autoscaled by this HPA. The autoscaling configuration applies only to the stateless API workload.
-
-### PostgreSQL StatefulSet
-
-PostgreSQL was migrated from a Deployment to a StatefulSet.
-
-The migration introduced:
-
-- Stable Pod identity (`postgres-0`).
-- A dedicated headless Service.
-- Stateful workload management.
-- Reuse of the existing PersistentVolumeClaim.
-- Retention of the existing persistent volume during migration.
-
-The normal `db` Service remains in place, so the API can continue connecting to PostgreSQL through the same service name.
-
-### Backup and Recovery
-
-A PostgreSQL backup was created using `pg_dump` and inspected to verify the resulting SQL dump.
-
-A restore test was performed using a temporary PostgreSQL environment:
-
-- Restored the database dump.
-- Verified that the database schema and `tasks` table were present.
-- Verified table ownership.
-- Confirmed that the restore operation completed successfully.
-
-The backup used for this test represented an empty baseline database, so the restored `tasks` table contained zero rows. The test verified the restoration procedure and schema recovery, not recovery of populated production data.
-
-### ServiceAccount and Access Control
-
-The API uses a dedicated ServiceAccount named `taskflow-api`.
-
-- The Deployment references the dedicated ServiceAccount.
-- Automatic ServiceAccount token mounting is disabled.
-- The token mount was verified to be absent from the running API Pod.
-- The application does not currently require Kubernetes API permissions.
-- No additional Role or RoleBinding permissions were granted to the API.
-
-This follows a least-privilege approach by avoiding unnecessary access to the Kubernetes API.
-
-### SecurityContext and Container Hardening
-
-The TaskFlow API container is configured to run with reduced privileges.
+The API container and Pod use restricted execution settings, including:
 
 - `runAsNonRoot: true`
-- `runAsUser: 999`
-- `runAsGroup: 999`
+- Non-root user/group IDs
 - `allowPrivilegeEscalation: false`
-- `capabilities.drop: ALL`
+- Dropped Linux capabilities
+- Read-only root filesystem in the hardened Kubernetes configuration
+- Dedicated ServiceAccount
+- Disabled automatic ServiceAccount token mounting
 
-The Dockerfile was also modified to run the application as a non-root user. The container's user identity was verified during testing.
+The API does not currently require Kubernetes API permissions, so no additional permissions are granted to its ServiceAccount.
 
 ### NetworkPolicies
 
-Two NetworkPolicies are configured in the `taskflow` namespace.
+Two NetworkPolicies are applied in the `taskflow` namespace.
 
-**PostgreSQL NetworkPolicy:**
+**PostgreSQL policy:** allows ingress on TCP/5432 only from TaskFlow API Pods in the namespace.
 
-- Selects PostgreSQL Pods using `app=postgres`.
-- Allows ingress on TCP port `5432`.
-- Allows connections only from Pods labeled `app=taskflow-api` in the same namespace.
+**API policy:** allows ingress on TCP/8000 from permitted namespace workloads and Traefik in `kube-system`; egress is not currently restricted.
 
-**API NetworkPolicy:**
+Network isolation was tested using temporary Pods and a temporary namespace:
 
-- Selects API Pods using `app=taskflow-api`.
-- Allows ingress on TCP port `8000`.
-- Allows connections from Pods in the same namespace using an empty `podSelector`.
-- Allows ingress from Traefik in the `kube-system` namespace so traffic routed through the Ingress Controller can reach the API.
-- Does not restrict egress traffic.
+- In-namespace access to the API was verified.
+- API access from an external test namespace was blocked.
+- Direct Pod-IP access from the external test namespace was blocked.
+- PostgreSQL access from an unauthorized test Pod was blocked.
 
-**Network isolation was tested:**
-
-- Verified that an in-namespace test Pod could access the API.
-- Verified that a test Pod in another namespace could not access the API through the Service.
-- Verified that direct Pod-IP access from the external test namespace was also blocked.
-- Tested PostgreSQL ingress from an unauthorized test Pod and confirmed it could not connect.
-
-These tests were performed using temporary Pods and a temporary namespace, which were removed after testing.
+Temporary testing resources were removed after testing.
 
 ### Ingress and TLS
 
-- Enabled and verified the Traefik Ingress Controller in K3s.
-- Created an Ingress resource for TaskFlow using the hostname `taskflow.local`.
-- Routed HTTP traffic to the `taskflow-api` Service on port `8000`.
-- Troubleshot a `502 Bad Gateway` caused by the API NetworkPolicy blocking traffic from Traefik.
-- Updated the API NetworkPolicy to allow traffic from Traefik in the `kube-system` namespace.
-- Configured local hostname resolution for `taskflow.local` on the VM and Mac.
-- Generated a self-signed TLS certificate and private key using OpenSSL, including a Subject Alternative Name (SAN) for `taskflow.local`.
-- Created the Kubernetes TLS Secret `taskflow-tls` and configured the Ingress to use it.
-- Verified HTTP and HTTPS access to TaskFlow, including the `/docs` endpoint.
-- Inspected the certificate using OpenSSL and tested HTTPS access from the Mac browser.
-- Learned why self-signed certificates trigger trust warnings and why `curl -k` was used during testing.
+- Traefik Ingress Controller.
+- Ingress hostname: `taskflow.local`.
+- API Service backend: `taskflow-api:8000`.
+- Self-signed TLS certificate with a SAN for `taskflow.local`.
+- TLS Secret: `taskflow-tls`.
+- HTTP and HTTPS access verified, including `/docs`.
+- NetworkPolicy troubleshooting to allow Ingress Controller traffic.
+- Local hostname resolution configured for testing.
 
-### Current Kubernetes Status
-
-| **Resource**              | **Name**                      | **Status**         |
-| ------------------------- | ----------------------------- | ------------------ |
-| Namespace                 | `taskflow`                    | Configured         |
-| API Deployment            | `taskflow-api`                | 2/2 Ready          |
-| API Service               | `taskflow-api`                | Configured         |
-| PostgreSQL StatefulSet    | `postgres`                    | 1/1 Ready          |
-| PostgreSQL Pod            | `postgres-0`                  | Running            |
-| Database Service          | `db`                          | Configured         |
-| Headless Service          | `postgres-headless`           | Configured         |
-| PersistentVolumeClaim     | `postgres-pvc`                | Bound, 2Gi         |
-| ConfigMap                 | `taskflow-config`             | Configured         |
-| Secret                    | `postgres-secret`             | Configured         |
-| ServiceAccount            | `taskflow-api`                | Configured         |
-| Horizontal Pod Autoscaler | `api-hpa`                     | Active, 2 replicas |
-| PostgreSQL NetworkPolicy  | `postgres-network-policy`     | Applied and tested |
-| API NetworkPolicy         | `taskflow-api-network-policy` | Applied and tested |
-
-The API and PostgreSQL workloads are running in the `taskflow` namespace. The HPA has been verified through a scale-up test, and the network isolation policies have been tested.
-
-The Kubernetes environment remains a learning and portfolio environment rather than a production-ready deployment.
+Self-signed certificates are used for this learning environment and are not equivalent to a publicly trusted certificate.
 
 ## Helm
 
-A Helm chart for TaskFlow is being developed in `helm/taskflow/` to gradually template and package Kubernetes resources.
+A Helm chart is maintained under `helm/taskflow/` to template and package Kubernetes configuration.
 
-### Current Helm Progress
+### Chart progress
 
-- Initialized the chart structure and configured `Chart.yaml`.
-- Created reusable template helpers for chart names, labels, and selectors in `_helpers.tpl`.
-- Started templating the API Deployment.
-- Parameterized the replica count, image, pull policy, service port, resources, and security settings through `values.yaml`.
-- Added Pod-level security settings to the Deployment template (`runAsNonRoot`, `runAsUser`, `runAsGroup`, and `fsGroup`).
-- Added container-level security settings (`allowPrivilegeEscalation: false`, read-only root filesystem, and dropped capabilities).
-- Included resource requests and limits, environment references, and liveness, readiness, and startup probes in the template.
-- Validated the chart with `helm lint` and inspected rendered output using `helm template`.
+- Initialized chart structure and `Chart.yaml`.
+- Created reusable template helpers for chart names, labels and selectors in `_helpers.tpl`.
+- Templated the API Deployment and parameterized replicas, image, pull policy, service port, resources and security settings.
+- Added Pod and container security settings, including non-root execution, `fsGroup`, privilege escalation restrictions, dropped capabilities and read-only root filesystem.
+- Included resource requests/limits, environment references and health probes in chart configuration.
+- Aligned Deployment selectors and Pod labels with the existing live Deployment.
+- Aligned resource naming and Service selectors with existing Kubernetes resources.
+- Aligned Ingress host, TLS Secret and Service backend settings.
+- Checked PostgreSQL resource references and persistent storage settings without modifying the live database.
 
-The chart is still under development and has not yet been used to migrate the existing cluster resources.
+### Validation
+
+```bash
+helm lint helm/taskflow
+helm template taskflow helm/taskflow -n taskflow
+```
+
+Both validation commands passed. The chart was rendered and inspected locally but has not been installed into or used to adopt the live cluster resources. Helm release installation, upgrades and rollbacks remain future practice.
+
+## Backup and Recovery
+
+A PostgreSQL backup was previously created using `pg_dump` and inspected. A restore test was performed in a temporary PostgreSQL environment:
+
+- Restored the database dump.
+- Verified the database schema and `tasks` table.
+- Verified table ownership.
+- Confirmed that the restore completed successfully.
+
+The backup used in that test represented an empty baseline database, so the restored `tasks` table contained no rows. The test demonstrated the restore procedure and schema recovery, rather than recovery of populated application data. A more operational backup-and-recovery exercise, including populated data, automation and backup retention, remains a planned task.
 
 ## Operations and Troubleshooting
 
-Operational experience gained through the project includes:
+Practical experience gained includes:
 
 - Inspecting container resource usage with `docker stats`.
-- Reviewing API, PostgreSQL, and Nginx logs with `docker logs`.
-- Following logs in real time.
-- Filtering log output with `grep`.
-- Counting matching log lines with `wc -l`.
-- Restricting log output to a recent period with `--since`.
-- Investigating database connectivity failures.
+- Reviewing and filtering API, PostgreSQL and Nginx logs.
+- Investigating database connectivity failures and Docker DNS.
 - Reproducing database outages and observing application behavior.
-- Understanding Docker Compose networking and internal DNS resolution.
-- Monitoring host-level metrics with Prometheus and Node Exporter.
-- Visualizing infrastructure metrics with Grafana.
-- Investigating system uptime and network traffic through PromQL.
-- Inspecting Linux processes using `htop` and `ps`.
-- Understanding process IDs, parent process IDs, process states, and CPU consumption.
+- Inspecting Linux processes using `htop`, `ps` and process information.
 - Investigating container runtime processes and `containerd-shim-runc-v2`.
-- Troubleshooting Kubernetes Pods, Services, and container startup failures.
-- Inspecting Kubernetes resource usage with `kubectl top`.
+- Troubleshooting Kubernetes Pods, Services, deployments and container startup failures.
+- Inspecting Kubernetes resources using `kubectl top`.
 - Monitoring HPA scaling behavior.
 - Working with PostgreSQL StatefulSets and persistent storage.
-- Creating and inspecting PostgreSQL backups.
-- Testing PostgreSQL restore procedures.
+- Creating and inspecting PostgreSQL backups and performing restore tests.
 - Testing Kubernetes network isolation.
+- Troubleshooting GitHub Actions, SSH, Tailscale and automated deployments.
 
 ### Incident: High CPU Usage — November 16, 2026
 
-During Kubernetes troubleshooting, the Grafana dashboard reported CPU usage of approximately 99.9%.
+The Grafana dashboard reported CPU utilization of approximately 99.9%, and Alertmanager successfully delivered a `HighCPUUsage` notification to Telegram.
 
-Alertmanager successfully delivered a `HighCPUUsage` notification to Telegram.
-
-Stopping K3s did not immediately resolve the high CPU usage.
-
-Further investigation using `htop` revealed four runaway `gosu postgres` processes, each consuming approximately 200% CPU.
-
-Using `ps`, their shared parent process was identified as `containerd-shim-runc-v2`, associated with the Kubernetes container runtime.
-
-The four processes continued running even after the K3s service had been stopped.
+Stopping K3s did not immediately resolve the CPU overload. Investigation using `htop` revealed four runaway `gosu postgres` processes, each consuming approximately 200% CPU. Their shared parent process was identified as `containerd-shim-runc-v2`. The processes continued running after the K3s service had been stopped.
 
 After terminating the processes, CPU utilization dropped significantly:
 
-| **Metric**           | **Before** | **After** |
-| -------------------- | ---------- | --------- |
-| CPU 0                | 100%       | 2.8%      |
-| CPU 1                | 100%       | 0.8%      |
-| Load average (1 min) | 5.04       | 3.87      |
-| RAM                  | 927 MB     | 893 MB    |
+| Metric | Before | After |
+|---|---:|---:|
+| CPU 0 | 100% | 2.8% |
+| CPU 1 | 100% | 0.8% |
+| Load average (1 min) | 5.04 | 3.87 |
+| RAM | 927 MB | 893 MB |
 
-This confirmed that the four runaway processes were responsible for the immediate CPU overload.
-
-The underlying reason why the processes became stuck remains under investigation.
-
-The incident provided practical experience with monitoring alerts, Linux process inspection, container runtime behavior, and resource troubleshooting.
+The processes were identified as the immediate cause of the overload. The underlying reason they became stuck remains under investigation.
 
 ### Incident: Prometheus Instrumentator Compatibility — November 18, 2026
 
-The TaskFlow API returned HTTP 500 errors after a compatibility issue with `prometheus-fastapi-instrumentator` 7.1.0.
+The TaskFlow API returned HTTP 500 errors due to a compatibility issue with `prometheus-fastapi-instrumentator` 7.1.0. The middleware failed with an `AttributeError` involving an internal FastAPI router object.
 
-The middleware failed with an `AttributeError` involving an internal FastAPI router object.
+The dependency constraint in `requirements.txt` was adjusted to avoid the incompatible version. After rebuilding and deploying the updated image, API endpoints were verified again.
 
-The dependency constraint was adjusted in `requirements.txt` to avoid the incompatible version.
+### CI/CD Deployment Troubleshooting — November 23, 2026
 
-After rebuilding and deploying the updated image, the API endpoints were verified again.
+During implementation of the automated deployment pipeline, several issues were identified and corrected:
 
-This incident provided practical experience with dependency compatibility, application logs, error investigation, and CI/CD-based deployment fixes.
+- SSH was listening on port 2222 rather than the default port 22; the workflow SSH commands were updated.
+- The deployment script referenced the wrong `kubectl` path; it was corrected to `/usr/local/bin/kubectl`, the K3s symlink.
+- The deployment script initially used the wrong container name; it was corrected to `taskflow-api`.
+- The deployment pipeline was rerun and completed successfully.
 
-The project emphasizes not only deploying services but also understanding failures, identifying their causes, and observing how infrastructure behaves under different conditions.
+The troubleshooting process helped validate the runner's private network connection, restricted SSH execution, deployment script and Kubernetes rollout verification.
 
 ## Project Roadmap
 
@@ -727,63 +588,43 @@ The project emphasizes not only deploying services but also understanding failur
 - [x] Linux fundamentals and networking
 - [x] Git and GitHub workflow
 - [x] Docker and Docker Compose
-- [x] CI/CD with GitHub Actions and GHCR
-- [x] Deployment and Nginx reverse proxy
-- [x] Monitoring stack with Prometheus and Node Exporter
-- [x] Grafana dashboard with infrastructure graphs
-- [x] Alertmanager and Telegram alert notifications
-- [x] Initial K3s cluster setup
-- [x] Kubernetes Namespaces, Deployments, Pods, and Services
+- [x] Nginx reverse proxy
+- [x] CI tests with GitHub Actions
+- [x] Docker image build and GHCR publishing
+- [x] Private remote access through Tailscale
+- [x] Monitoring with Prometheus and Node Exporter
+- [x] Grafana dashboards
+- [x] Alertmanager and Telegram notifications
+- [x] K3s cluster setup
+- [x] Kubernetes Namespaces, Deployments, Pods and Services
 - [x] ConfigMaps and Secrets
 - [x] Persistent storage with PVCs
 - [x] Liveness and readiness probes
 - [x] CPU and memory requests and limits
 - [x] Kubernetes resource monitoring
-- [x] Horizontal Pod Autoscaler using CPU and memory
-- [x] HPA scale-up testing
+- [x] HPA configuration and scale-up testing
 - [x] PostgreSQL migration to StatefulSet
-- [x] PostgreSQL backup creation and inspection
-- [x] PostgreSQL restore testing
-- [x] Dockerfile non-root hardening
-- [x] Kubernetes SecurityContext
-- [x] Dedicated ServiceAccount
-- [x] Disabled automatic ServiceAccount token mounting
+- [x] Baseline PostgreSQL backup and restore testing
+- [x] Dockerfile and Kubernetes container security hardening
+- [x] Dedicated ServiceAccount and disabled automatic token mounting
 - [x] RBAC and least-privilege approach
-- [x] PostgreSQL NetworkPolicy
-- [x] API NetworkPolicy
+- [x] PostgreSQL and API NetworkPolicies
 - [x] Network isolation testing
-- [x] Traefik Ingress Controller and hostname-based Ingress routing
-- [x] TLS configuration and HTTPS testing with a self-signed certificate
-- [x] Helm chart initialization and API Deployment template rendering
+- [x] Traefik Ingress and external routing
+- [x] TLS configuration and HTTPS testing
+- [x] Helm chart templating, linting and rendering validation
+- [x] Automated Kubernetes CI/CD deployment through GitHub Actions, GHCR, Tailscale and restricted SSH
 
 ### Planned
 
-- [x] Kubernetes Ingress and external routing
-- [x] TLS configuration for Kubernetes workloads
-- [ ] Rolling updates and rollbacks
-- [ ] Complete Helm chart templates for TaskFlow resources and validate them
-- [ ] Test Helm release installation, upgrades, and rollbacks
-- [ ] Further Kubernetes troubleshooting practice
+- [ ] Operational backup and recovery for populated PostgreSQL data, automation and retention
+- [ ] Further Kubernetes troubleshooting, rollout and rollback practice
+- [ ] Helm release installation, upgrades and rollbacks
 - [ ] Terraform and Infrastructure as Code
-- [ ] Cloud infrastructure deployment
-- [ ] Further backup and recovery testing with populated data
-- [ ] Final project documentation and job preparation
+- [ ] AWS fundamentals and cloud infrastructure
+- [ ] Terraform-managed AWS infrastructure
+- [ ] EKS deployment and cloud-based TaskFlow portfolio environment
 
-## Engineering Documentation
+---
 
-Project documentation is maintained alongside the implementation.
-
-- [Learning Log](https://github.com/KuroHakke003/taskflow-devops/blob/main/docs/learning-log)
-- [Architecture Overview](https://github.com/KuroHakke003/taskflow-devops/blob/main/docs/architecture/overview.md)
-- [Architecture Decisions](https://github.com/KuroHakke003/taskflow-devops/blob/main/docs/decisions)
-- [Incident Reports](https://github.com/KuroHakke003/taskflow-devops/blob/main/docs/incidents)
-
-The learning log records practical tasks, technical discoveries, problems encountered, and solutions implemented during development.
-
-## Project Goal
-
-The goal is to build practical DevOps experience by operating a real application through its lifecycle:
-
-**Development → Testing → Containerization → CI/CD → Deployment → Monitoring → Troubleshooting → Infrastructure Automation**
-
-TaskFlow serves as a continuously evolving portfolio project demonstrating practical knowledge of Linux, networking, containers, CI/CD, monitoring, observability, Kubernetes, security hardening, and infrastructure operations.
+TaskFlow is a learning and portfolio environment. It demonstrates practical DevOps implementation and troubleshooting, but it is not intended to be represented as a production-ready system.
