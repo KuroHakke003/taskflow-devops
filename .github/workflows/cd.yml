@@ -97,7 +97,7 @@ jobs:
           printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/taskflow_deploy
           chmod 600 ~/.ssh/taskflow_deploy
 
-          ssh-keyscan -t ed25519 100.83.189.47 > ~/.ssh/known_hosts
+          ssh-keyscan -p 2222 -t ed25519 100.83.189.47 > ~/.ssh/known_hosts
 
           ACTUAL_FINGERPRINT=$(ssh-keygen -lf ~/.ssh/known_hosts -E sha256 | awk '{print $2}')
           EXPECTED_FINGERPRINT="SHA256:S9KMO8yhVwa83DYCl0Cyna4aBrkyyjL7373riBOhJ/g"
@@ -109,7 +109,7 @@ jobs:
 
       - name: Deploy to K3s
         run: |
-          ssh -i ~/.ssh/taskflow_deploy \
+          ssh -p 2222 -i ~/.ssh/taskflow_deploy \
             -o IdentitiesOnly=yes \
             taskflow-deploy@100.83.189.47 \
             "deploy ${{ github.sha }}"
