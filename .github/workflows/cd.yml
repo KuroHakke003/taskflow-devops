@@ -1,68 +1,115 @@
-name: Build and Push to GHCR
+name: TaskFlow CI/CD
+
 on:
- push:
-  branches: [ "main" ]
- pull_request:
-  branches: [ "main" ]
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
 permissions:
   contents: read
   packages: write
+
 jobs:
- test:
-  runs-on: ubuntu-latest
-  env:
-     DATABASE_URL: postgresql+psycopg://taskflow:taskflow@localhost:5432/taskflow
-  services:
-   postgres:
-    image: postgres:16
+  test:
+    runs-on: ubuntu-latest
     env:
-     POSTGRES_USER: taskflow
-     POSTGRES_PASSWORD: taskflow
-     POSTGRES_DB: taskflow
-    options: >-
-      --health-cmd "pg_isready -U taskflow -d taskflow"
-      --health-interval 10s
-      --health-timeout 5s
-      --health-retries 5
-      --health-start-period 10s
-    ports:
-     - "5432:5432"
-  steps:
-   - name: Checkout repository code
-     uses: actions/checkout@v4
+      DATABASE_URL: postgresql+psycopg://taskflow:taskflow@localhost:5432/taskflow
 
-   - name: Set up Python 3.12
-     uses: actions/setup-python@v5
-     with:
-      python-version: '3.12'
-      cache: 'pip'
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: taskflow
+          POSTGRES_PASSWORD: taskflow
+          POSTGRES_DB: taskflow
+        options: >-
+          --health-cmd "pg_isready -U taskflow -d taskflow"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+          --health-start-period 10s
+        ports:
+          - "5432:5432"
 
-   - name: Install dependencies
-     run: |
-      python -m pip install --upgrade pip
-      if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+    steps:
+      - name: Checkout repository code
+        uses: actions/checkout@v4
 
-   - name: Run tests with pytest
-     run: |
-      pytest
- build-and-push:
-  needs: test
-  runs-on: ubuntu-latest
-  if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-  steps:
-   - name: Checkout repository
-     uses: actions/checkout@v4
-   - name: Log In to GHCR
-     uses: docker/login-action@v3
-     with:
-      registry: ghcr.io
-      username: ${{ github.actor }}
-      password: ${{ secrets.GITHUB_TOKEN }}
-   - name: Build and push Docker image
-     uses: docker/build-push-action@v6
-     with:
-      context: .
-      push: true
-      tags: |
-       ghcr.io/kurohakke003/taskflow-devops:latest
-       ghcr.io/kurohakke003/taskflow-devops:${{ github.sha }}
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: Run tests with pytest
+        run: pytest
+
+  build-and-push:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log In to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/kurohakke003/taskflow-devops:latest
+            ghcr.io/kurohakke003/taskflow-devops:${{ github.sha }}
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Connect to Tailscale
+        uses: tailscale/github-action@v4
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci
+
+      - name: Configure SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.TASKFLOW_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/taskflow_deploy
+          chmod 600 ~/.ssh/taskflow_deploy
+
+          ssh-keyscan -t ed25519 100.83.189.47 > ~/.ssh/known_hosts
+
+          ACTUAL_FINGERPRINT=$(ssh-keygen -lf ~/.ssh/known_hosts -E sha256 | awk '{print $2}')
+          EXPECTED_FINGERPRINT="SHA256:S9KMO8yhVwa83DYCl0Cyna4aBrkyyjL7373riBOhJ/g"
+
+          if [ "$ACTUAL_FINGERPRINT" != "$EXPECTED_FINGERPRINT" ]; then
+            echo "SSH host fingerprint verification failed!"
+            exit 1
+          fi
+
+      - name: Deploy to K3s
+        run: |
+          ssh -i ~/.ssh/taskflow_deploy \
+            -o IdentitiesOnly=yes \
+            taskflow-deploy@100.83.189.47 \
+            "deploy ${{ github.sha }}"
