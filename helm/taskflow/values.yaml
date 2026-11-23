@@ -1,11 +1,20 @@
+nameOverride: ""
+fullnameOverride: taskflow-api
+
 replicaCount: 2
 
 image:
   repository: ghcr.io/kurohakke003/taskflow-devops
   tag: latest
-  pullPolicy: IfNotPresent
+  pullPolicy: Always
 
 service:
+  port: 8000
+
+app:
+  name: "TaskFlow API"
+  env: production
+  host: "0.0.0.0"
   port: 8000
 
 resources:
@@ -18,12 +27,46 @@ resources:
 
 podSecurityContext:
   runAsNonRoot: true
-  runAsUser: 1000
-  runAsGroup: 1000
-  fsGroup: 1000
+  runAsUser: 999
+  runAsGroup: 999
+  fsGroup: 999
+
 securityContext:
   allowPrivilegeEscalation: false
   readOnlyRootFilesystem: true
   capabilities:
     drop:
       - ALL
+
+serviceAccount:
+  create: true
+  name: ""
+
+ingress:
+  enabled: true
+  className: traefik
+  host: taskflow.local
+  tls:
+    enabled: true
+    secretName: taskflow-tls
+  path: /
+  pathType: Prefix
+
+postgres:
+  replicaCount: 1
+  image:
+    repository: postgres
+    tag: 16-bookworm
+  serviceName: postgres-headless
+  service:
+    port: 5432
+  storage:
+    claimName: postgres-pvc
+    mountPath: /var/lib/postgresql/data
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
