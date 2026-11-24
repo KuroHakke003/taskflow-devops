@@ -19,7 +19,7 @@ The project also includes monitoring and alerting using Prometheus, Node Exporte
 
 ### Docker Compose
 
-```text
+```
                          Client
                            |
                          HTTPS
@@ -35,11 +35,12 @@ The project also includes monitoring and alerting using Prometheus, Node Exporte
                       PostgreSQL 16
                            |
                     postgres_data
+
 ```
 
 ### Monitoring
 
-```text
+```
                          Host System
                            |
                       Node Exporter
@@ -53,11 +54,12 @@ The project also includes monitoring and alerting using Prometheus, Node Exporte
                Grafana         Alertmanager
                   |                 |
               Dashboards      Telegram Alerts
+
 ```
 
 ### Kubernetes (K3s)
 
-```text
+```
                          K3s Cluster
                            |
                     Namespace: taskflow
@@ -75,38 +77,39 @@ The project also includes monitoring and alerting using Prometheus, Node Exporte
                                   postgres-pvc
 
        NetworkPolicies restrict workload ingress
+
 ```
 
 The Kubernetes environment is separate from the Docker Compose deployment, with independent application workloads and database storage. Traefik routes traffic through an Ingress using `taskflow.local`, with TLS configured using a self-signed certificate.
 
 ## Technology Stack
 
-| Area | Technologies |
-|---|---|
-| Application | Python 3.12, FastAPI, Uvicorn |
-| Database | PostgreSQL 16 |
-| Database access | SQLAlchemy 2, psycopg |
-| Containers | Docker, Docker Compose |
-| Reverse proxy | Nginx |
-| CI/CD | GitHub Actions |
-| Container registry | GitHub Container Registry (GHCR) |
-| Private connectivity | Tailscale, SSH |
-| Kubernetes | K3s, kubectl, Ingress, Traefik |
-| Packaging | Helm |
-| Kubernetes workloads | Deployments, StatefulSets, Pods |
-| Networking | ClusterIP Services, Headless Services, NetworkPolicies |
-| Configuration | ConfigMaps, Kubernetes Secrets |
-| Storage | PersistentVolumes, PersistentVolumeClaims, local-path |
-| Scaling | Horizontal Pod Autoscaler (HPA) |
-| Container security | SecurityContext, non-root containers, capability restrictions |
-| Monitoring | Prometheus, Node Exporter |
-| Visualization | Grafana |
-| Alerting | Alertmanager, Telegram |
-| Metrics queries | PromQL |
+| **Area**             | **Technologies**                                              |
+| -------------------- | ------------------------------------------------------------- |
+| Application          | Python 3.12, FastAPI, Uvicorn                                 |
+| Database             | PostgreSQL 16                                                 |
+| Database access      | SQLAlchemy 2, psycopg                                         |
+| Containers           | Docker, Docker Compose                                        |
+| Reverse proxy        | Nginx                                                         |
+| CI/CD                | GitHub Actions                                                |
+| Container registry   | GitHub Container Registry (GHCR)                              |
+| Private connectivity | Tailscale, SSH                                                |
+| Kubernetes           | K3s, kubectl, Ingress, Traefik                                |
+| Packaging            | Helm                                                          |
+| Kubernetes workloads | Deployments, StatefulSets, Pods                               |
+| Networking           | ClusterIP Services, Headless Services, NetworkPolicies        |
+| Configuration        | ConfigMaps, Kubernetes Secrets                                |
+| Storage              | PersistentVolumes, PersistentVolumeClaims, local-path         |
+| Scaling              | Horizontal Pod Autoscaler (HPA)                               |
+| Container security   | SecurityContext, non-root containers, capability restrictions |
+| Monitoring           | Prometheus, Node Exporter                                     |
+| Visualization        | Grafana                                                       |
+| Alerting             | Alertmanager, Telegram                                        |
+| Metrics queries      | PromQL                                                        |
 
 ## Repository Structure
 
-```text
+```
 .
 ├── app/
 │   ├── routers/
@@ -142,7 +145,8 @@ The Kubernetes environment is separate from the Docker Compose deployment, with 
 │       ├── 2026-11-19.md
 │       ├── 2026-11-21.md
 │       ├── 2026-11-22.md
-│       └── 2026-11-23.md
+│       ├── 2026-11-23.md
+│       └── 2026-11-24.md
 ├── helm/
 │   └── taskflow/
 │       ├── templates/
@@ -189,6 +193,7 @@ The Kubernetes environment is separate from the Docker Compose deployment, with 
 ├── README.md
 ├── requirements.txt
 └── taskflow-backup.sql
+
 ```
 
 - `app/` — FastAPI application, database configuration, models, schemas and task routes.
@@ -200,7 +205,6 @@ The Kubernetes environment is separate from the Docker Compose deployment, with 
 - `docs/` — architecture documentation, decision records, incident notes and dated learning logs.
 - `secrets/` and `taskflow-backup.sql` — local sensitive material. These must not be committed or exposed publicly; ensure they are excluded by `.gitignore` and rotate any credentials if they were exposed.
 
-
 ## Running the Docker Compose Environment
 
 ### Prerequisites
@@ -211,7 +215,7 @@ The Kubernetes environment is separate from the Docker Compose deployment, with 
 
 ### 1. Clone the repository
 
-```bash
+```
 git clone https://github.com/KuroHakke003/taskflow-devops.git
 cd taskflow-devops
 ```
@@ -222,14 +226,14 @@ Create `.env` from `.env.example` and adjust values as needed. The Compose deplo
 
 ### 3. Pull and start services
 
-```bash
+```
 docker compose pull
 docker compose up -d
 ```
 
 ### 4. Check status and logs
 
-```bash
+```
 docker compose ps
 docker logs api_service
 ```
@@ -238,13 +242,13 @@ docker logs api_service
 
 In the Docker Compose environment, Nginx is exposed on host port `80`. The API container listens internally on port `8000` and is not directly published to the host in the current configuration.
 
-| Endpoint | Purpose |
-|---|---|
-| `/docs` | Swagger UI |
-| `/openapi.json` | OpenAPI schema |
-| `/tasks` | Task management endpoints |
-| `/health/live` | Liveness check |
-| `/health/ready` | Readiness check |
+| **Endpoint**    | **Purpose**               |
+| --------------- | ------------------------- |
+| `/docs`         | Swagger UI                |
+| `/openapi.json` | OpenAPI schema            |
+| `/tasks`        | Task management endpoints |
+| `/health/live`  | Liveness check            |
+| `/health/ready` | Readiness check           |
 
 Private remote access to the Compose deployment is provided through the configured Tailscale Serve HTTPS address.
 
@@ -256,7 +260,7 @@ The GitHub Actions workflow is located at `.github/workflows/cd.yml` and is name
 
 On pushes and pull requests targeting `main`, the workflow runs tests using Python 3.12 and PostgreSQL 16. For pushes to `main`, successful tests are followed by a Docker image build and publication to GHCR, then an automated deployment to K3s.
 
-```text
+```
 Push to main
     |
     v
@@ -282,6 +286,7 @@ Update K3s Deployment image
     |
     v
 Wait for rollout status
+
 ```
 
 ### CI: testing
@@ -300,8 +305,9 @@ Wait for rollout status
 
 Image repository:
 
-```text
+```
 ghcr.io/kurohakke003/taskflow-devops
+
 ```
 
 ### Automated K3s deployment
@@ -366,14 +372,16 @@ Queries explored include `rate()`, `time()`, `node_boot_time_seconds` and `node_
 
 Example uptime query:
 
-```promql
+```
 time() - node_boot_time_seconds
+
 ```
 
 Example network receive rate:
 
-```promql
+```
 rate(node_network_receive_bytes_total[5m])
+
 ```
 
 Monitoring and alerting have been implemented and are part of the operational capabilities practiced in this project.
@@ -431,12 +439,12 @@ The `taskflow-config` ConfigMap contains non-sensitive application settings such
 
 The API Deployment uses `/health/live` for liveness and `/health/ready` for readiness.
 
-| Workload | Resource | Request | Limit |
-|---|---|---:|---:|
-| TaskFlow API | CPU | 100m | 500m |
-| TaskFlow API | Memory | 128Mi | 256Mi |
-| PostgreSQL | CPU | 100m | 500m |
-| PostgreSQL | Memory | 128Mi | 512Mi |
+| **Workload** | **Resource** | **Request** | **Limit** |
+| ------------ | ------------ | ----------- | --------- |
+| TaskFlow API | CPU          | 100m        | 500m      |
+| TaskFlow API | Memory       | 128Mi       | 256Mi     |
+| PostgreSQL   | CPU          | 100m        | 500m      |
+| PostgreSQL   | Memory       | 128Mi       | 512Mi     |
 
 ### Horizontal Pod Autoscaler
 
@@ -511,7 +519,7 @@ A Helm chart is maintained under `helm/taskflow/` to template and package Kubern
 
 ### Validation
 
-```bash
+```
 helm lint helm/taskflow
 helm template taskflow helm/taskflow -n taskflow
 ```
@@ -520,14 +528,40 @@ Both validation commands passed. The chart was rendered and inspected locally bu
 
 ## Backup and Recovery
 
-A PostgreSQL backup was previously created using `pg_dump` and inspected. A restore test was performed in a temporary PostgreSQL environment:
+An operational PostgreSQL backup and recovery workflow has been implemented and tested against populated TaskFlow data.
 
-- Restored the database dump.
-- Verified the database schema and `tasks` table.
-- Verified table ownership.
-- Confirmed that the restore completed successfully.
+### Backup and restore verification
 
-The backup used in that test represented an empty baseline database, so the restored `tasks` table contained no rows. The test demonstrated the restore procedure and schema recovery, rather than recovery of populated application data. A more operational backup-and-recovery exercise, including populated data, automation and backup retention, remains a planned task.
+- Created test tasks through the TaskFlow API to ensure the database contained real application data.
+- Generated PostgreSQL SQL dumps using `pg_dump` executed inside the Kubernetes PostgreSQL Pod.
+- Restored backups into separate test databases (`taskflow_restore_test` and `taskflow_restore_automated_test`) without modifying the original database.
+- Verified that all three task records were recovered successfully in both restore tests.
+
+### Backup automation
+
+The backup script is located at `/home/kuro/backup-taskflow.sh` and stores backups under `/home/kuro/backups/taskflow/postgres`.
+
+The script implements:
+
+- Timestamped backup filenames.
+- Automatic backup-directory creation.
+- Dump generation through `kubectl exec`.
+- Temporary-file handling and cleanup with `trap`.
+- Validation of the dump file using `test -s`.
+- Finalization via `mv` only after validation.
+- Failure handling with `set -e`.
+- Automatic deletion of backups older than seven days.
+
+### Scheduling
+
+- Configured root Cron to run the backup daily at 02:00.
+- Redirected output and errors to `/home/kuro/backups/taskflow/backup.log`.
+- Tested scheduling with a temporary every-minute Cron entry.
+- Moved execution to root's Cron because the K3s administrative kubeconfig is root-restricted and user Cron could not use interactive sudo.
+- Removed `sudo` from the script and used an absolute `kubectl` path.
+
+A failure scenario was tested using an incorrect Pod name. The script exited on failure, removed its temporary file and did not proceed with retention cleanup. An automated backup was subsequently restored and verified with all three task records.
+
 
 ## Operations and Troubleshooting
 
@@ -543,9 +577,24 @@ Practical experience gained includes:
 - Inspecting Kubernetes resources using `kubectl top`.
 - Monitoring HPA scaling behavior.
 - Working with PostgreSQL StatefulSets and persistent storage.
-- Creating and inspecting PostgreSQL backups and performing restore tests.
+- Creating, automating, scheduling and inspecting PostgreSQL backups; restoring populated backups and verifying recovered records.
+- Investigating Deployment rollouts, ReplicaSets, rollout revisions and failed image updates.
+- Recovering deployments using both standard and revision-specific rollbacks.
+- Troubleshooting readiness probe failures using Pod conditions, events and `kubectl describe`.
+- Investigating HPA scaling decisions, metrics, requests, limits and stabilization behavior.
 - Testing Kubernetes network isolation.
 - Troubleshooting GitHub Actions, SSH, Tailscale and automated deployments.
+
+### Kubernetes Rollout, Rollback, Readiness and HPA Practice — November 24, 2026
+
+- Triggered a Deployment rollout through a Pod-template annotation change and observed the new ReplicaSet and revision.
+- Simulated an image update failure using a nonexistent image tag and inspected the resulting `ImagePullBackOff` state.
+- Verified that existing healthy replicas remained available during the failed rollout.
+- Recovered using `kubectl rollout undo` and also practiced a targeted rollback to a selected revision.
+- Deliberately misconfigured the readiness probe endpoint, observed a Running but NotReady Pod and investigated the HTTP 404 probe events.
+- Verified that readiness failure did not cause container restarts and that the liveness probe remained unaffected.
+- Repaired the readiness endpoint and confirmed a successful rollout with healthy, Ready replicas.
+- Investigated HPA replica changes, metrics, resource requests and scale-down stabilization; confirmed the API replicas remained healthy.
 
 ### Incident: High CPU Usage — November 16, 2026
 
@@ -555,12 +604,12 @@ Stopping K3s did not immediately resolve the CPU overload. Investigation using `
 
 After terminating the processes, CPU utilization dropped significantly:
 
-| Metric | Before | After |
-|---|---:|---:|
-| CPU 0 | 100% | 2.8% |
-| CPU 1 | 100% | 0.8% |
-| Load average (1 min) | 5.04 | 3.87 |
-| RAM | 927 MB | 893 MB |
+| **Metric**           | **Before** | **After** |
+| -------------------- | ---------- | --------- |
+| CPU 0                | 100%       | 2.8%      |
+| CPU 1                | 100%       | 0.8%      |
+| Load average (1 min) | 5.04       | 3.87      |
+| RAM                  | 927 MB     | 893 MB    |
 
 The processes were identified as the immediate cause of the overload. The underlying reason they became stuck remains under investigation.
 
@@ -604,7 +653,7 @@ The troubleshooting process helped validate the runner's private network connect
 - [x] Kubernetes resource monitoring
 - [x] HPA configuration and scale-up testing
 - [x] PostgreSQL migration to StatefulSet
-- [x] Baseline PostgreSQL backup and restore testing
+- [x] PostgreSQL backup and restore testing, including populated data, automation, Cron scheduling and retention
 - [x] Dockerfile and Kubernetes container security hardening
 - [x] Dedicated ServiceAccount and disabled automatic token mounting
 - [x] RBAC and least-privilege approach
@@ -614,11 +663,10 @@ The troubleshooting process helped validate the runner's private network connect
 - [x] TLS configuration and HTTPS testing
 - [x] Helm chart templating, linting and rendering validation
 - [x] Automated Kubernetes CI/CD deployment through GitHub Actions, GHCR, Tailscale and restricted SSH
+- [x] Kubernetes troubleshooting, rolling updates, failed rollout recovery, targeted rollback, readiness probe troubleshooting and HPA investigation
 
 ### Planned
 
-- [ ] Operational backup and recovery for populated PostgreSQL data, automation and retention
-- [ ] Further Kubernetes troubleshooting, rollout and rollback practice
 - [ ] Helm release installation, upgrades and rollbacks
 - [ ] Terraform and Infrastructure as Code
 - [ ] AWS fundamentals and cloud infrastructure
